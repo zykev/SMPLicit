@@ -1,0 +1,16 @@
+LICENSE
+README.md
+setup.py
+SMPLicit/SMPL.py
+SMPLicit/SMPLicit.py
+SMPLicit/SMPLicit_options.py
+SMPLicit/__init__.py
+SMPLicit/network.py
+SMPLicit/smplicit_core_test.py
+SMPLicit/util_smpl.py
+SMPLicit.egg-info/PKG-INFO
+SMPLicit.egg-info/SOURCES.txt
+SMPLicit.egg-info/dependency_links.txt
+SMPLicit.egg-info/top_level.txt
+SMPLicit/utils/__init__.py
+SMPLicit/utils/sdf.py

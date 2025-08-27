@@ -8,20 +8,20 @@ import numpy as np
 # 2 -> Hair
 # 3 -> Glove
 # 4 -> Sunglasses,
-# 5 -> Upper-Clothes,
+# 5 -> Upper-Clothes, *
 # 6 -> Dress,
-# 7 -> Coat,
+# 7 -> Coat, *
 # 8 -> Socks,
-# 9 -> Pants,
+# 9 -> Pants, *
 # 10 -> Torso-Skin
 # 11 -> Scarf
-# 12 -> Skirt
+# 12 -> Skirt *
 # 13 -> Face
 # 14 -> Left Arm
 # 15 -> Right Arm
 # 16 -> Left Leg
 # 17 -> Right Leg
-# 18 -> Left Shoe
+# 18 -> Left Shoe *
 # 19 -> Right Shoe
 
 class FitOptions():
@@ -38,10 +38,10 @@ class FitOptions():
 
 
     def initialize(self):
-        self._parser.add_argument('--image_folder', type=str, default='data/images/', help='folder with input images')
-        self._parser.add_argument('--smpl_prediction_folder', type=str, default='data/smpl_prediction/', help='folder with input images')
-        self._parser.add_argument('--cloth_segmentation_folder', type=str, default='data/cloth_segmentation/', help='folder with input images')
-        self._parser.add_argument('--instance_segmentation_folder', type=str, default='data/instance_segmentation/', help='folder with input images')
+        self._parser.add_argument('--image_folder', type=str, default='fit_SMPLicit/data/images/', help='folder with input images')
+        self._parser.add_argument('--smpl_prediction_folder', type=str, default='fit_SMPLicit/data/smpl_prediction/', help='folder with input images')
+        self._parser.add_argument('--cloth_segmentation_folder', type=str, default='fit_SMPLicit/data/cloth_segmentation/', help='folder with input images')
+        self._parser.add_argument('--instance_segmentation_folder', type=str, default='fit_SMPLicit/data/instance_segmentation/', help='folder with input images')
         self._parser.add_argument('--image_extension', type=str, default='.jpg', help='image extension (.png, .jpg, etc)')
 
         # Optimization parameters:

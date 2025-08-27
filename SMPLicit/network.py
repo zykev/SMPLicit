@@ -3,23 +3,24 @@ import numpy as np
 import torchvision
 import torch
 import torch.nn.functional as F
+from torch.nn.utils.parametrizations import weight_norm
 
 class Network(nn.Module):
     def __init__(self, n_z_style=1, point_pos_size=3, output_dim=1, n_z_cut=12):
         super(Network, self).__init__()
         self.point_pos_size = point_pos_size
 
-        self.fc0_cloth = nn.utils.weight_norm(nn.Linear(n_z_style, 128, bias=True))
-        self.fc1_cloth = nn.utils.weight_norm(nn.Linear(128, 128, bias=True))
+        self.fc0_cloth = weight_norm(nn.Linear(n_z_style, 128, bias=True))
+        self.fc1_cloth = weight_norm(nn.Linear(128, 128, bias=True))
 
-        self.fc0_query = nn.utils.weight_norm(nn.Conv1d(point_pos_size, 128, kernel_size=1, bias=True))
-        self.fc1_query = nn.utils.weight_norm(nn.Conv1d(128, 256, kernel_size=1, bias=True))
+        self.fc0_query = weight_norm(nn.Conv1d(point_pos_size, 128, kernel_size=1, bias=True))
+        self.fc1_query = weight_norm(nn.Conv1d(128, 256, kernel_size=1, bias=True))
 
-        self.fc0 = nn.utils.weight_norm(nn.Conv1d(128+256 + n_z_cut, 312, kernel_size=1, bias=True))
-        self.fc1 = nn.utils.weight_norm(nn.Conv1d(312, 312, kernel_size=1, bias=True))
-        self.fc2 = nn.utils.weight_norm(nn.Conv1d(312, 256, kernel_size=1, bias=True))
-        self.fc3 = nn.utils.weight_norm(nn.Conv1d(256, 128, kernel_size=1, bias=True))
-        self.fc4 = nn.utils.weight_norm(nn.Conv1d(128, output_dim, kernel_size=1, bias=True))
+        self.fc0 = weight_norm(nn.Conv1d(128+256 + n_z_cut, 312, kernel_size=1, bias=True))
+        self.fc1 = weight_norm(nn.Conv1d(312, 312, kernel_size=1, bias=True))
+        self.fc2 = weight_norm(nn.Conv1d(312, 256, kernel_size=1, bias=True))
+        self.fc3 = weight_norm(nn.Conv1d(256, 128, kernel_size=1, bias=True))
+        self.fc4 = weight_norm(nn.Conv1d(128, output_dim, kernel_size=1, bias=True))
 
         self.activation = F.relu
         #self.activation = torch.sin

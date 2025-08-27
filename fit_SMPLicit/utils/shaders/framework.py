@@ -79,15 +79,16 @@ def findFileOrThrow(strBasename):
     if os.path.isfile(strBasename):
         return strBasename
 
-    LOCAL_FILE_DIR = "data" + os.sep
-    GLOBAL_FILE_DIR = os.path.dirname(os.path.abspath(__file__)) + os.sep + "data" + os.sep
+    # LOCAL_FILE_DIR = "data" + os.sep
+    LOCAL_FILE_DIR = "fit_SMPLicit" + os.sep
+    # GLOBAL_FILE_DIR = os.path.dirname(os.path.abspath(__file__)) + os.sep + "data" + os.sep
 
     strFilename = LOCAL_FILE_DIR + strBasename
     if os.path.isfile(strFilename):
         return strFilename
 
-    strFilename = GLOBAL_FILE_DIR + strBasename
-    if os.path.isfile(strFilename):
-        return strFilename
+    # strFilename = GLOBAL_FILE_DIR + strBasename
+    # if os.path.isfile(strFilename):
+    #     return strFilename
 
     raise IOError('Could not find target file ' + strBasename)

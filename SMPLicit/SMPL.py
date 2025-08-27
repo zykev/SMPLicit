@@ -2,7 +2,7 @@ import torch
 import json
 import sys
 import numpy as np
-from .util_smpl import batch_global_rigid_transformation, batch_rodrigues, reflect_pose
+from SMPLicit.util_smpl import batch_global_rigid_transformation, batch_rodrigues, reflect_pose
 import torch.nn as nn
 import os
 import trimesh
@@ -25,32 +25,32 @@ class SMPL(nn.Module):
         else:
             self.faces = None
 
-        np_v_template = np.array(model['v_template'], dtype = np.float)
+        np_v_template = np.array(model['v_template'], dtype = float)
         self.register_buffer('v_template', torch.from_numpy(np_v_template).float())
         self.size = [np_v_template.shape[0], 3]
 
-        np_shapedirs = np.array(model['shapedirs'], dtype = np.float)
+        np_shapedirs = np.array(model['shapedirs'], dtype = float)
         self.num_betas = np_shapedirs.shape[-1]
         np_shapedirs = np.reshape(np_shapedirs, [-1, self.num_betas]).T
         self.register_buffer('shapedirs', torch.from_numpy(np_shapedirs).float())
 
-        np_J_regressor = np.array(model['J_regressor'], dtype = np.float)
+        np_J_regressor = np.array(model['J_regressor'], dtype = float)
         self.register_buffer('J_regressor', torch.from_numpy(np_J_regressor).float())
 
-        np_posedirs = np.array(model['posedirs'], dtype = np.float)
+        np_posedirs = np.array(model['posedirs'], dtype = float)
         num_pose_basis = np_posedirs.shape[-1]
         np_posedirs = np.reshape(np_posedirs, [-1, num_pose_basis]).T
         self.register_buffer('posedirs', torch.from_numpy(np_posedirs).float())
 
         self.parents = np.array(model['kintree_table'])[0].astype(np.int32)
 
-        np_joint_regressor = np.array(model['cocoplus_regressor'], dtype = np.float)
+        np_joint_regressor = np.array(model['cocoplus_regressor'], dtype = float)
         if joint_type == 'lsp':
             self.register_buffer('joint_regressor', torch.from_numpy(np_joint_regressor[:, :14]).float())
         else:
             self.register_buffer('joint_regressor', torch.from_numpy(np_joint_regressor).float())
 
-        np_weights = np.array(model['weights'], dtype = np.float)
+        np_weights = np.array(model['weights'], dtype = float)
 
         vertex_count = np_weights.shape[0] 
         vertex_component = np_weights.shape[1]
@@ -91,7 +91,7 @@ class SMPL(nn.Module):
         else: #theta is already rotations
             Rs = theta.view(-1,24,3,3)
 
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
         v_posed = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1]) + v_shaped
         self.J_transformed, A = batch_global_rigid_transformation(Rs, J, self.parents, rotate_base = False)
 
@@ -122,7 +122,7 @@ class SMPL(nn.Module):
         self.cur_device = torch.device(device.type, device.index)
 
         Rs = batch_rodrigues(theta.view(-1, 3)).view(-1, 24, 3, 3)
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
 
         pose_params = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed_smpl = pose_params + v_smpl
@@ -167,7 +167,7 @@ class SMPL(nn.Module):
         self.cur_device = torch.device(device.type, device.index)
 
         Rs = batch_rodrigues(theta.view(-1, 3)).view(-1, 24, 3, 3)
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
 
         pose_params = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed_smpl = pose_params + v_smpl
@@ -212,7 +212,7 @@ class SMPL(nn.Module):
         self.cur_device = torch.device(device.type, device.index)
 
         Rs = batch_rodrigues(theta.view(-1, 3)).view(-1, 24, 3, 3)
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
 
         pose_params = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed_smpl = pose_params + v_smpl
@@ -283,7 +283,7 @@ class SMPL(nn.Module):
         self.cur_device = torch.device(device.type, device.index)
 
         Rs = batch_rodrigues(theta.view(-1, 3)).view(-1, 24, 3, 3)
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
 
         pose_params = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed_smpl = pose_params + v_smpl
@@ -316,7 +316,7 @@ class SMPL(nn.Module):
         self.cur_device = torch.device(device.type, device.index)
 
         Rs = batch_rodrigues(theta.view(-1, 3)).view(-1, 24, 3, 3)
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
 
         pose_params = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed_smpl = pose_params + v_smpl
@@ -354,7 +354,7 @@ class SMPL(nn.Module):
         self.cur_device = torch.device(device.type, device.index)
 
         Rs = batch_rodrigues(theta.view(-1, 3)).view(-1, 24, 3, 3)
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
 
         pose_params = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed_smpl = pose_params + v_smpl
@@ -437,7 +437,7 @@ class SMPL(nn.Module):
         else: #theta is already rotations
             Rs = theta_from.view(-1,24,3,3)
 
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
         pose_displ = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed = pose_displ + v_shaped
         self.J_transformed, A = batch_global_rigid_transformation(Rs, J, self.parents, rotate_base = False)
@@ -460,7 +460,7 @@ class SMPL(nn.Module):
         
         ### REPOSE:
         Rs = batch_rodrigues(theta_to.view(-1, 3)).view(-1, 24, 3, 3)
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
 
         pose_params = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed_cloth = pose_params[:, correspondance] + unposed_v.unsqueeze(0)
@@ -486,7 +486,7 @@ class SMPL(nn.Module):
         J = torch.stack([Jx, Jy, Jz], dim = 2)
         Rs = batch_rodrigues(theta_from.view(-1, 3)).view(-1, 24, 3, 3)
 
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
         pose_displ = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed = pose_displ + v_shaped
         self.J_transformed, A = batch_global_rigid_transformation(Rs, J, self.parents, rotate_base = False)
@@ -510,7 +510,7 @@ class SMPL(nn.Module):
         
         ### REPOSE:
         Rs = batch_rodrigues(theta_to.view(-1, 3)).view(-1, 24, 3, 3)
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
 
         pose_params = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed_cloth = pose_params[:, correspondance] + unposed_v.unsqueeze(0)
@@ -545,7 +545,7 @@ class SMPL(nn.Module):
         else: #theta is already rotations
             Rs = theta_from.view(-1,24,3,3)
 
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
         pose_displ = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed = pose_displ + v_shaped
         self.J_transformed, A = batch_global_rigid_transformation(Rs, J, self.parents, rotate_base = False)
@@ -573,7 +573,7 @@ class SMPL(nn.Module):
         
         ### REPOSE:
         Rs = batch_rodrigues(theta_to.view(-1, 3)).view(-1, 24, 3, 3)
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
 
         pose_params = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed_cloth = pose_params[:, correspondance] + unposed_v.unsqueeze(0)
@@ -608,7 +608,7 @@ class SMPL(nn.Module):
         else: #theta is already rotations
             Rs = theta.view(-1,24,3,3)
 
-        pose_feature = (Rs[:, 1:, :, :]).sub(1.0, self.e3).view(-1, 207)
+        pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
         pose_displ = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1])
         v_posed = pose_displ + v_shaped
         self.J_transformed, A = batch_global_rigid_transformation(Rs, J, self.parents, rotate_base = False)
@@ -692,7 +692,7 @@ if __name__ == '__main__':
             2.04248756e-01,  -6.33800551e-02,  -5.50178960e-02,
             -1.00920045e+00,   2.39532292e-01,   3.62904727e-01,
             -3.38783532e-01,   9.40650925e-02,  -8.44506770e-02,
-            3.55101633e-03,  -2.68924050e-02,   4.93676625e-02],dtype = np.float)
+            3.55101633e-03,  -2.68924050e-02,   4.93676625e-02],dtype = float)
         
     beta = np.array([-0.25349993,  0.25009069,  0.21440795,  0.78280628,  0.08625954,
             0.28128183,  0.06626327, -0.26495767,  0.09009246,  0.06537955 ])

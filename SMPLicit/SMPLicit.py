@@ -3,10 +3,11 @@ import numpy as np
 import torch.nn as nn
 import os
 import trimesh
-from .SMPL import SMPL
-import kaolin
-from .SMPLicit_options import Options
-from .smplicit_core_test import Model
+from SMPLicit.SMPL import SMPL
+# import kaolin
+from SMPLicit.SMPLicit_options import Options
+from SMPLicit.smplicit_core_test import Model
+
 
 class SMPLicit(nn.Module):
     def __init__(self):
@@ -80,10 +81,12 @@ class SMPLicit(nn.Module):
         posed_smpl = self.SMPL_Layer.forward(beta=beta, theta=pose, get_skin=True)[0][0].cpu().data.numpy()
         J, unposed_smpl = self.SMPL_Layer.skeleton(beta, require_body=True)
         Astar_smpl = self.SMPL_Layer.forward(beta=beta, theta=self.Astar_pose, get_skin=True)[0][0]
-        inference_mesh = kaolin.rep.TriangleMesh.from_tensors(unposed_smpl[0], 
-                                        torch.LongTensor(self.smpl_faces).cuda())
-        inference_lowerbody = kaolin.rep.TriangleMesh.from_tensors(Astar_smpl,
-                                        torch.LongTensor(self.smpl_faces).cuda())
+        # # inference_mesh = kaolin.rep.TriangleMesh.from_tensors(unposed_smpl[0], 
+        #                                 torch.LongTensor(self.smpl_faces).cuda())
+        inference_mesh = unposed_smpl[0]
+        # inference_lowerbody = kaolin.rep.TriangleMesh.from_tensors(Astar_smpl,
+        #                                 torch.LongTensor(self.smpl_faces).cuda())
+        inference_lowerbody = Astar_smpl
 
         out_meshes = [trimesh.Trimesh(posed_smpl, self.smpl_faces, process=False)]
         for i, id_ in enumerate(model_ids):

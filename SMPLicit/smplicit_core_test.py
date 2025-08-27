@@ -1,8 +1,8 @@
 import torch
 import numpy as np
-from .utils.sdf import create_grid, eval_grid_octree, eval_grid
+from SMPLicit.utils.sdf import create_grid, eval_grid_octree, eval_grid
 from skimage import measure
-from .network import Network
+from SMPLicit.network import Network
 
 import trimesh
 import socket
@@ -58,7 +58,9 @@ class Model():
         z_cut = z_cut.cuda().reshape(1, -1)
         z_style = z_style.cuda().reshape(1, -1)
 
-        smpl_points = smpl_trianglemesh.vertices
+        # smpl_points = smpl_trianglemesh.vertices
+        smpl_points = smpl_trianglemesh
+        
         smpl_points = smpl_points[self.clusters[self.num_clusters]]
 
         def eval_func(points):
@@ -71,7 +73,7 @@ class Model():
 
         sdf = eval_grid_octree(coords, eval_func, threshold=0.01, num_samples=10000, init_resolution=16)
 
-        verts, faces, normals, values = measure.marching_cubes_lewiner(sdf, thresh)
+        verts, faces, normals, values = measure.marching_cubes(sdf, thresh)
         cloth_mesh = trimesh.Trimesh(np.float64(verts), faces[:, ::-1])
         cloth_mesh.vertices /= resolution
         cloth_mesh.vertices *= (b_max - b_min)[None]

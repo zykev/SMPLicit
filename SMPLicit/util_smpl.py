@@ -8,7 +8,7 @@ import cv2
 import math
 import os
 # def load_mean_theta():
-#     mean = np.zeros(85, dtype = np.float)
+#     mean = np.zeros(85, dtype = float)
 
 #     mean_values = h5py.File(os.path.join(os.path.dirname(__file__),'model/neutral_smpl_mean_params.h5'),'r')
 #     mean_pose = mean_values['pose']
@@ -62,7 +62,7 @@ def quat2mat(quat):
 def batch_global_rigid_transformation(Rs, Js, parent, rotate_base = False):
     N = Rs.shape[0]
     if rotate_base:
-        np_rot_x = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], dtype = np.float)
+        np_rot_x = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], dtype = float)
         np_rot_x = np.reshape(np.tile(np_rot_x, [N, 1]), [N, 3, 3])
         rot_x = Variable(torch.from_numpy(np_rot_x).float()).to(Rs.device)
         root_rotation = torch.matmul(Rs[:, 0, :, :],  rot_x)
