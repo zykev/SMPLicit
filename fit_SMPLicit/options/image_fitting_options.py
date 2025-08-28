@@ -24,25 +24,51 @@ import numpy as np
 # 18 -> Left Shoe *
 # 19 -> Right Shoe
 
+# 4ddress
+# 0 -> background, white
+# 1 -> skin, grey
+# 2 -> hair, orange *
+# 3 -> left shoe, purple *
+# 4 -> right shoe, red
+# 5 -> upper clothes, green *
+# 6 -> lower clothes, blue *
+# 7 -> outer clothes, yellow *
+
 class FitOptions():
     def __init__(self):
         self._parser = argparse.ArgumentParser()
 
+    # def set_segmentation(self, segmentation):
+    #     self.segmentation = segmentation
+
+    #     labels = np.unique(self.segmentation)
+    #     labels = np.intersect1d(labels, [5, 7, 9, 12, 18])
+    #     self._opt.labels = labels
+    #     return self._opt
+    
     def set_segmentation(self, segmentation):
         self.segmentation = segmentation
 
         labels = np.unique(self.segmentation)
-        labels = np.intersect1d(labels, [5, 7, 9, 12, 18])
+        labels = np.intersect1d(labels, [2, 3, 5, 6, 7])
         self._opt.labels = labels
         return self._opt
 
 
     def initialize(self):
-        self._parser.add_argument('--image_folder', type=str, default='fit_SMPLicit/data/images/', help='folder with input images')
-        self._parser.add_argument('--smpl_prediction_folder', type=str, default='fit_SMPLicit/data/smpl_prediction/', help='folder with input images')
-        self._parser.add_argument('--cloth_segmentation_folder', type=str, default='fit_SMPLicit/data/cloth_segmentation/', help='folder with input images')
-        self._parser.add_argument('--instance_segmentation_folder', type=str, default='fit_SMPLicit/data/instance_segmentation/', help='folder with input images')
-        self._parser.add_argument('--image_extension', type=str, default='.jpg', help='image extension (.png, .jpg, etc)')
+        # self._parser.add_argument('--image_folder', type=str, default='fit_SMPLicit/data/images/', help='folder with input images')
+        # self._parser.add_argument('--smpl_prediction_folder', type=str, default='fit_SMPLicit/data/smpl_prediction/', help='folder with input images')
+        # self._parser.add_argument('--cloth_segmentation_folder', type=str, default='fit_SMPLicit/data/cloth_segmentation/', help='folder with input images')
+        # self._parser.add_argument('--instance_segmentation_folder', type=str, default='fit_SMPLicit/data/instance_segmentation/', help='folder with input images')
+        # self._parser.add_argument('--image_extension', type=str, default='.jpg', help='image extension (.png, .jpg, etc)')
+        # self._parser.add_argument('--camera_folder', type=str, default='fit_SMPLicit/data/cameras/', help='folder with input cameras')
+
+        self._parser.add_argument('--image_folder', type=str, default='4ddress_sample/images/', help='folder with input images')
+        self._parser.add_argument('--smpl_prediction_folder', type=str, default='4ddress_sample/smpl_prediction/', help='folder with input images')
+        self._parser.add_argument('--cloth_segmentation_folder', type=str, default='4ddress_sample/cloth_segmentation/', help='folder with input images')
+        self._parser.add_argument('--instance_segmentation_folder', type=str, default='4ddress_sample/instance_segmentation/', help='folder with input images')
+        self._parser.add_argument('--image_extension', type=str, default='.png', help='image extension (.png, .jpg, etc)')
+        self._parser.add_argument('--camera_folder', type=str, default='4ddress_sample/cameras.pkl', help='folder with input cameras')
 
         # Optimization parameters:
         self._parser.add_argument('--lr', type=float, default=0.01)
@@ -77,7 +103,7 @@ class FitOptions():
         #self._opt.lr = 0.01
 
         # TODO: ADD INITIALIZATION PARAMETERS (eg skirt different than pants):
-        if optimization_index == 5: # T-Shirt
+        if optimization_index == 5: # upperbody, ori: 5 T-Shirt
             self._opt.index_cloth = 0
             self._opt.clusters = 'indexs_clusters_tshirt_smpl.npy'
             self._opt.num_clusters = 500
@@ -94,7 +120,7 @@ class FitOptions():
             self._opt.repose = False
             self._opt.pose_inference_repose = torch.zeros(1, 72).cuda()
 
-        elif optimization_index == 7: # Coat
+        elif optimization_index == 7: # ori: 7 Coat
             self._opt.index_cloth = 0
             self._opt.clusters = 'indexs_clusters_tshirt_smpl.npy'
             self._opt.num_clusters = 500
@@ -111,7 +137,7 @@ class FitOptions():
             self._opt.repose = False
             self._opt.pose_inference_repose = torch.zeros(1, 72).cuda()
 
-        elif optimization_index == 9: # Pants
+        elif optimization_index == 6: # lowerbody, ori 9, Pants
             self._opt.index_cloth = 1
             self._opt.clusters = 'clusters_lowerbody.npy'
             self._opt.num_clusters = 500
@@ -149,7 +175,7 @@ class FitOptions():
             self._opt.pose_inference_repose[0, 5] = 0.04
             self._opt.pose_inference_repose[0, 8] = -0.04
 
-        elif optimization_index == 18: # Shoe
+        elif optimization_index == 3: # ori 18, Shoe
             self._opt.index_cloth = 4
             self._opt.clusters = 'clusters_shoes.npy'
             self._opt.num_clusters = 100

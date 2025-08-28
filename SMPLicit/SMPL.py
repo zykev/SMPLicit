@@ -2,7 +2,7 @@ import torch
 import json
 import sys
 import numpy as np
-from SMPLicit.util_smpl import batch_global_rigid_transformation, batch_rodrigues, reflect_pose
+from .util_smpl import batch_global_rigid_transformation, batch_rodrigues, reflect_pose
 import torch.nn as nn
 import os
 import trimesh
@@ -75,7 +75,7 @@ class SMPL(nn.Module):
             for f in self.faces: # Faces are 1-based, not 0-based in obj files
                 fp.write( 'f {:d} {:d} {:d}\n'.format(f[0] + 1, f[1] + 1, f[2] + 1) )
 
-    def forward(self, beta, theta, get_skin = False, theta_in_rodrigues=True):
+    def forward(self, beta, theta, transl = None, get_skin = False, theta_in_rodrigues=True):
         device = beta.device
         self.cur_device = torch.device(device.type, device.index)
 
@@ -109,12 +109,16 @@ class SMPL(nn.Module):
 
         joints = torch.stack([joint_x, joint_y, joint_z], dim = 2)
 
+        if transl is not None:
+            verts += transl
+            joints += transl
+
         if get_skin:
             return verts, joints, Rs
         else:
             return joints
 
-    def deform_clothes_smpl_usingseveralpoints(self, theta, J, v_smpl, v_cloth, neighbors = 3):
+    def deform_clothes_smpl_usingseveralpoints(self, theta, J, v_smpl, v_cloth, neighbors = 3, transl=None):
         assert len(theta) == 1, 'currently we only support batchsize=1'
         num_batch=1
 
@@ -157,9 +161,13 @@ class SMPL(nn.Module):
         verts_smpl = v_homo_smpl[:, :, :3, 0]
         verts_cloth = v_homo_cloth[:, :, :3, 0]
 
+        if transl is not None:
+            verts_smpl += transl.unsqueeze(0)
+            verts_cloth += transl.unsqueeze(0)
+
         return verts_smpl, verts_cloth
 
-    def deform_clothed_smpl_usingseveralpoints(self, theta, J, v_smpl, v_cloth, neighbors = 3):
+    def deform_clothed_smpl_usingseveralpoints(self, theta, J, v_smpl, v_cloth, neighbors = 3, transl=None):
         assert len(theta) == 1, 'currently we only support batchsize=1'
         num_batch=1
 
@@ -201,6 +209,10 @@ class SMPL(nn.Module):
         v_homo_cloth = torch.matmul(applying_T, torch.unsqueeze(v_posed_homo_cloth, -1))
         verts_smpl = v_homo_smpl[:, :, :3, 0]
         verts_cloth = v_homo_cloth[:, :, :3, 0]
+
+        if transl is not None:
+            verts_smpl += transl.unsqueeze(0)
+            verts_cloth += transl.unsqueeze(0)
 
         return verts_smpl, verts_cloth
 
@@ -275,7 +287,7 @@ class SMPL(nn.Module):
         return verts_smpl, verts_cloth
 
 
-    def deform_clothed_smpl(self, theta, J, v_smpl, v_cloth):
+    def deform_clothed_smpl(self, theta, J, v_smpl, v_cloth, transl=None):
         assert len(theta) == 1, 'currently we only support batchsize=1'
         num_batch=1
 
@@ -306,9 +318,13 @@ class SMPL(nn.Module):
         verts_smpl = v_homo_smpl[:, :, :3, 0]
         verts_cloth = v_homo_cloth[:, :, :3, 0]
 
+        if transl is not None:
+            verts_smpl += transl.unsqueeze(0)
+            verts_cloth += transl.unsqueeze(0)
+
         return verts_smpl, verts_cloth
    
-    def deform_clothed_smpl_w_normals(self, theta, J, v_smpl, v_cloth, v_normals):
+    def deform_clothed_smpl_w_normals(self, theta, J, v_smpl, v_cloth, v_normals, transl=None):
         assert len(theta) == 1, 'currently we only support batchsize=1'
         num_batch=1
 
@@ -343,6 +359,10 @@ class SMPL(nn.Module):
         verts_smpl = v_homo_smpl[:, :, :3, 0]
         verts_cloth = v_homo_cloth[:, :, :3, 0]
         verts_normals = v_normals_posed[:, :, :3, 0]
+
+        if transl is not None:
+            verts_smpl += transl.unsqueeze(0)
+            verts_cloth += transl.unsqueeze(0)
 
         return verts_smpl, verts_cloth, verts_normals
    
@@ -421,7 +441,7 @@ class SMPL(nn.Module):
             v_normalized = v - beta_normalization + beta_addition
         return v_normalized
 
-    def unpose_and_deform_cloth(self, v_cloth_posed, theta_from, theta_to, beta, Jsmpl, vsmpl, theta_in_rodrigues=True):
+    def unpose_and_deform_cloth(self, v_cloth_posed, theta_from, theta_to, beta, Jsmpl, vsmpl, theta_in_rodrigues=True, transl=None):
         ### UNPOSE:
         device = theta_from.device
         self.cur_device = torch.device(device.type, device.index)
@@ -472,9 +492,12 @@ class SMPL(nn.Module):
         v_posed_homo_cloth = torch.cat([v_posed_cloth, torch.ones(num_batch, v_posed_cloth.shape[1], 1, device = self.cur_device)], dim = 2)
         v_homo_cloth = torch.matmul(T[0, correspondance], torch.unsqueeze(v_posed_homo_cloth, -1))
         verts_cloth = v_homo_cloth[:, :, :3, 0]
+
+        if transl is not None:
+            verts_cloth += transl.unsqueeze(0)
         return verts_cloth[0]
 
-    def unpose_and_deform_cloth_w_normals(self, v_cloth_posed, v_normals, theta_from, theta_to, beta, Jsmpl, vsmpl):
+    def unpose_and_deform_cloth_w_normals(self, v_cloth_posed, v_normals, theta_from, theta_to, beta, Jsmpl, vsmpl, transl=None):
         device = theta_from.device
         self.cur_device = torch.device(device.type, device.index)
         num_batch = beta.shape[0]
@@ -526,6 +549,9 @@ class SMPL(nn.Module):
         v_normals_posed = torch.cat([v_normals.unsqueeze(0), torch.ones(num_batch, v_normals.shape[0], 1, device=self.cur_device)], dim=2)
         v_normals_posed = torch.matmul(T[0, correspondance], torch.unsqueeze(v_normals_posed, -1))
         v_normals_posed = v_normals_posed[:, :, :3, 0]
+
+        if transl is not None:
+            verts_cloth += transl.unsqueeze(0)
 
         return verts_cloth[0], v_normals_posed[0]
 

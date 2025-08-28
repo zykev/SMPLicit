@@ -1,8 +1,8 @@
 import torch
 import numpy as np
-from SMPLicit.utils.sdf import create_grid, eval_grid_octree, eval_grid
+from .utils.sdf import create_grid, eval_grid_octree, eval_grid
 from skimage import measure
-from SMPLicit.network import Network
+from .network import Network
 
 import trimesh
 import socket

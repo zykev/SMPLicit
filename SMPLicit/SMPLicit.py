@@ -3,10 +3,10 @@ import numpy as np
 import torch.nn as nn
 import os
 import trimesh
-from SMPLicit.SMPL import SMPL
+from .SMPL import SMPL
 # import kaolin
-from SMPLicit.SMPLicit_options import Options
-from SMPLicit.smplicit_core_test import Model
+from .SMPLicit_options import Options
+from .smplicit_core_test import Model
 
 
 class SMPLicit(nn.Module):

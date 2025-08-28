@@ -87,7 +87,8 @@ class Options():
 
     def parse(self):
         self.initialize()
-        self._opt = self._parser.parse_args()
+        # self._opt = self._parser.parse_args()
+        self._opt, unknown = self._parser.parse_known_args()
 
         self._opt.upperbody_b_min = [-0.8, -0.4, -0.3]
         self._opt.upperbody_b_max = [0.8, 0.6, 0.3]
