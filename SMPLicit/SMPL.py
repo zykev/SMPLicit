@@ -497,7 +497,7 @@ class SMPL(nn.Module):
             verts_cloth += transl.unsqueeze(0)
         return verts_cloth[0]
 
-    def unpose_and_deform_cloth_w_normals(self, v_cloth_posed, v_normals, theta_from, theta_to, beta, Jsmpl, vsmpl, transl=None):
+    def unpose_and_deform_cloth_w_normals(self, v_cloth_posed, v_normals, theta_from, theta_to, beta, Jsmpl, vsmpl, transl=None, return_unpose=False):
         device = theta_from.device
         self.cur_device = torch.device(device.type, device.index)
         num_batch = beta.shape[0]
@@ -553,7 +553,10 @@ class SMPL(nn.Module):
         if transl is not None:
             verts_cloth += transl.unsqueeze(0)
 
-        return verts_cloth[0], v_normals_posed[0]
+        if return_unpose:
+            return verts_cloth[0], v_normals_posed[0], unposed_v
+        else:
+            return verts_cloth[0], v_normals_posed[0], None
 
 
     def unpose_and_deform_cloth_w_normals2(self, v_cloth_posed, v_normals, theta_from, theta_to, beta, Jsmpl, vsmpl, v_normals_smooth, theta_in_rodrigues=True):

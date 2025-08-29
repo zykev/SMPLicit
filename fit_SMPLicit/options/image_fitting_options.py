@@ -74,7 +74,7 @@ class FitOptions():
         self._parser.add_argument('--lr', type=float, default=0.01)
         self._parser.add_argument('--lr_decayed', type=float, default=0.0003)
         self._parser.add_argument('--step', type=int, default=10000)
-        self._parser.add_argument('--iterations', type=int, default=200) # Decrease to 100 if it's too slow
+        self._parser.add_argument('--iterations', type=int, default=10) # Decrease to 100 if it's too slow
         self._parser.add_argument('--index_samples', type=int, default=100)
         self._parser.add_argument('--is_train', type=bool, default=False)
         self._parser.add_argument('--do_videos', type=bool, default=False)

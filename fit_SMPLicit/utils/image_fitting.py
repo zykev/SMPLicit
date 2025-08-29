@@ -217,18 +217,26 @@ def unpose_and_deform_cloth_tensor(vertices_tensor, pose_from, pose_to, beta, J,
         posed_verts.append(verts)
     return torch.cat(posed_verts)
 
-def unpose_and_deform_cloth_w_normals(model_trimesh, pose_from, pose_to, beta, J, v, SMPL_Layer, normals, step=10000, transl=None):
+def unpose_and_deform_cloth_w_normals(model_trimesh, pose_from, pose_to, beta, J, v, SMPL_Layer, normals, step=10000, transl=None, return_unpose=False):
     SMPL_Layer = SMPL_Layer.cpu()
-    for i in range(len(model_trimesh.vertices)//step + 1):
-        in_verts = torch.FloatTensor(model_trimesh.vertices[i*step:(i+1)*step])
+    posed_trimesh = model_trimesh.copy()
+
+    for i in range(len(posed_trimesh.vertices)//step + 1):
+        in_verts = torch.FloatTensor(posed_trimesh.vertices[i*step:(i+1)*step])
         in_normals = torch.FloatTensor(normals[i*step:(i+1)*step])
-        verts, out_normals = SMPL_Layer.unpose_and_deform_cloth_w_normals(in_verts, in_normals, pose_from, pose_to, beta.cpu(), J.cpu(), v.cpu(), transl=transl)
-        model_trimesh.vertices[step*i:step*(i+1)] = verts.cpu().data.numpy()
+        verts, out_normals, verts_unposed = SMPL_Layer.unpose_and_deform_cloth_w_normals(in_verts, in_normals, pose_from, pose_to, beta.cpu(), J.cpu(), v.cpu(), transl=transl, return_unpose=return_unpose)
+        posed_trimesh.vertices[step*i:step*(i+1)] = verts.cpu().data.numpy()
+        if verts_unposed is not None:
+            model_trimesh.vertices[step*i:step*(i+1)] = verts_unposed.cpu().data.numpy()
         normals[step*i:step*(i+1)] = out_normals.cpu().data.numpy()
 
     normals = normals/np.linalg.norm(normals, axis=1)[:, None]
+    # 保存到 trimesh 的属性里
+    posed_trimesh.vertex_normals = normals
     SMPL_Layer = SMPL_Layer.cuda()
-    return model_trimesh, normals
+
+    return posed_trimesh, normals
+
 
 def batch_posing(model_trimesh, pose, J, v, SMPL_Layer, step=10000):
     SMPL_Layer = SMPL_Layer.cpu()
@@ -242,18 +250,20 @@ def batch_posing(model_trimesh, pose, J, v, SMPL_Layer, step=10000):
 
 def batch_posing_w_normals(model_trimesh, normals, pose, J, v, SMPL_Layer, step=10000, transl=None):
     SMPL_Layer = SMPL_Layer.cpu()
-    for i in range(len(model_trimesh.vertices)//step + 1):
-        in_verts = torch.FloatTensor(model_trimesh.vertices[step*i:step*(i+1)]).unsqueeze(0)
+    posed_trimesh = model_trimesh.copy()
+    for i in range(len(posed_trimesh.vertices)//step + 1):
+        in_verts = torch.FloatTensor(posed_trimesh.vertices[step*i:step*(i+1)]).unsqueeze(0)
         in_norms = torch.FloatTensor(normals[step*i:step*(i+1)]).unsqueeze(0)
         vertices_smpl, deformed_v, out_normals= SMPL_Layer.deform_clothed_smpl_w_normals(pose, J.cpu(), v.cpu(), in_verts, in_norms, transl=transl)
         # Try consistent too:
         #vertices_smpl, deformed_v = SMPL_Layer.deform_clothed_smpl_usingseveralpoints(pose, J, v, torch.FloatTensor(model_trimesh.vertices[step*i:step*(i+1)]).unsqueeze(0), neighbors=3)
-        model_trimesh.vertices[step*i:step*(i+1)] = deformed_v.cpu().data.numpy()[0]
+        posed_trimesh.vertices[step*i:step*(i+1)] = deformed_v.cpu().data.numpy()[0]
         normals[step*i:step*(i+1)] = out_normals.cpu().data.numpy()
     SMPL_Layer = SMPL_Layer.cuda()
     normals = normals/np.linalg.norm(normals, axis=1)[:, None]
+    posed_trimesh.vertex_normals = normals  
 
-    return model_trimesh, normals
+    return posed_trimesh, normals
 
 # RENDERER CLASS:
 from OpenGL.GLUT import *

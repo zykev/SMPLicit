@@ -14,7 +14,7 @@ import time
 import tqdm
 from fit_SMPLicit.utils import image_fitting
 
-from dress4d_utils import get_cameras, get_depth_map, seg_to_label, compute_projections
+from dress4d_utils import get_cameras, get_depth_map, seg_to_label, compute_projections, get_multi_mesh_render
 
 import sys
 import os
@@ -49,7 +49,7 @@ cool_latent_reps = np.load('fit_SMPLicit/utils/z_gaussians.npy')
 print("PROCESSING:")
 print(files)
 
-def compute_sdf_from_mesh(mesh: kaolin.rep.SurfaceMesh, points: torch.Tensor) -> torch.Tensor:
+def compute_udf_from_mesh(mesh: kaolin.rep.SurfaceMesh, points: torch.Tensor) -> torch.Tensor:
     """
     根据 GitHub issue 中的官方推荐方法，实现从 Kaolin SurfaceMesh 计算 SDF 的函数。
 
@@ -87,16 +87,16 @@ def compute_sdf_from_mesh(mesh: kaolin.rep.SurfaceMesh, points: torch.Tensor) ->
     # 4. 判断点的符号（内外）
     # 遵循图中建议，这是第二步
     # 注意：check_sign 要求网格是水密的 (watertight)
-    is_inside = kaolin.ops.mesh.check_sign(vertices_batch, faces, points_batch)
+    # is_inside = kaolin.ops.mesh.check_sign(vertices_batch, faces, points_batch)
     
     # 5. 结合距离和符号
     # 将布尔值的 is_inside (True for inside) 转换为数值符号 (-1 for inside, 1 for outside)
-    sign = torch.where(is_inside, -1.0, 1.0).to(distance.device)
+    # sign = torch.where(is_inside, -1.0, 1.0).to(distance.device)
     
-    signed_distance = sign * distance
+    # signed_distance = sign * distance
     
     # 返回结果时去掉批处理维度，使其与输入点的维度匹配
-    return signed_distance.squeeze(0)
+    return distance.squeeze(0)
 
 
 # --- 2. 主循环：遍历每张图片进行处理 ---
@@ -113,8 +113,10 @@ for _file in files:
     smpl_prediction = pickle.load(open(path_smpl_prediction, 'rb'))
 
     posed_meshes = []
-    posed_normals = []
-    colors = []
+    unposed_meshes = []
+    cloth_latents = []
+    # posed_normals = []
+    # colors = []
 
     #for index_fitting in range(1):
     
@@ -169,9 +171,17 @@ for _file in files:
     # Prepare final mesh, and we will keep concatenating vertices/faces later on, while updating normals and colors:
     # vertices_smpl = SMPL_Layer.forward(beta=beta.cuda(), theta=pose.cuda(), get_skin=True)[0][0].cpu().data.numpy()
     # m = trimesh.Trimesh(vertices_smpl, smpl_faces.cpu().data.numpy())
+    _, v_unposed = SMPL_Layer.skeleton(beta.cuda(), require_body=True)
+    v_unposed = v_unposed[0].cpu().data.numpy()
+    mesh_smpl_unposed = trimesh.Trimesh(v_unposed, smpl_faces.cpu().data.numpy())
+    color = np.array([220, 220, 220, 255], dtype=np.uint8)   # 灰色
+    mesh_smpl_unposed.visual.vertex_colors = np.tile(color, (mesh_smpl_unposed.vertices.shape[0], 1))
+    mesh_smpl.visual.vertex_colors = np.tile(color, (mesh_smpl.vertices.shape[0], 1))
+
+    unposed_meshes.append(mesh_smpl_unposed)
     posed_meshes.append(mesh_smpl)
-    posed_normals.append(mesh_smpl.vertex_normals)
-    colors.append([220, 220, 220]) # 身体颜色设为灰色
+    # posed_normals.append(mesh_smpl.vertex_normals)
+    # colors.append([220, 220, 220, 255]) # 身体颜色设为灰色
 
 
     # Optimizating clothes one at a time
@@ -205,7 +215,7 @@ for _file in files:
 
         # Remove unnecessary points that are too far from body and are never occupied anyway:
         # 过滤掉离身体表面太远的采样点，以提高效率
-        unsigned_distance = torch.abs(compute_sdf_from_mesh(smpl_mesh, coords_tensor.cuda()))
+        unsigned_distance = compute_udf_from_mesh(smpl_mesh, coords_tensor.cuda())
 
         if cloth_optimization_index == 2:
             valid = unsigned_distance < 0.1
@@ -385,31 +395,52 @@ for _file in files:
 
         if cloth_optimization_index == 3: # Shoe
             smpl_mesh, model_trimesh = SMPLicit_Layer.reconstruct([_opt.index_cloth], [style[0]], _opt.pose_inference_repose.cuda(), beta.cuda())
+            cloth_latents.append(style[0].cpu().data.numpy())
         else:
             smpl_mesh, model_trimesh = SMPLicit_Layer.reconstruct([_opt.index_cloth], [torch.cat((shape, style), 1).cpu().data.numpy()[0]], _opt.pose_inference_repose.cuda(), beta.cuda())
+            cloth_latents.append(torch.cat((shape, style), 1)[0].cpu().data.numpy())
 
         smooth_normals = model_trimesh.vertex_normals.copy()
         normals = model_trimesh.vertex_normals.copy()
+
+        # color meshes:
+        color = np.array(_opt.color[0], dtype=np.uint8)
+        model_trimesh.visual.vertex_colors = np.tile(color, (model_trimesh.vertices.shape[0], 1))
 
         # Unpose+Pose if it's lower body, and pose directly if it's upper body:
         # 将 T-pose 下的衣物网格，通过蒙皮算法穿到目标姿态上
         if cloth_optimization_index == 6:
         # if cloth_optimization_index == 9 or cloth_optimization_index == 12:
-            model_trimesh, normals = image_fitting.unpose_and_deform_cloth_w_normals(model_trimesh, _opt.pose_inference_repose.cpu(), pose, beta.cpu(), J, v, SMPL_Layer, normals, transl=transl)
+            posed_trimesh, normals = image_fitting.unpose_and_deform_cloth_w_normals(model_trimesh, _opt.pose_inference_repose.cpu(), pose, beta.cpu(), J, v, SMPL_Layer, normals, transl=transl, return_unpose=True)
         else:
-            model_trimesh, normals = image_fitting.batch_posing_w_normals(model_trimesh, normals, pose, J, v, SMPL_Layer, transl=transl)
+            posed_trimesh, normals = image_fitting.batch_posing_w_normals(model_trimesh, normals, pose, J, v, SMPL_Layer, transl=transl)
 
         # Smooth meshes:
         # 对最终的网格进行平滑处理，使其更自然
+        posed_trimesh = trimesh.smoothing.filter_laplacian(posed_trimesh,lamb=0.5)
         model_trimesh = trimesh.smoothing.filter_laplacian(model_trimesh,lamb=0.5)
 
         # Save predictions before rendering all of them together
-        posed_meshes.append(model_trimesh)
-        posed_normals.append(normals)
-        colors.append(_opt.color[0][:3])
+        unposed_meshes.append(model_trimesh)
+        posed_meshes.append(posed_trimesh)
+        # posed_normals.append(normals)
+        # colors.append(_opt.color[0][:3])
 
-        save_dir = 'tmp'
-        model_trimesh.export(os.path.join(save_dir, 'cloth_' + str(cloth_optimization_index) + '.obj'))
+    
+    # --- save unposed and posed meshes ---
+    save_dir = 'tmp'
+    for i, (unposed_mesh, posed_mesh, cloth_latent) in enumerate(zip(unposed_meshes, posed_meshes, cloth_latents)):
+        unposed_mesh.export(os.path.join(save_dir, 'unposed_' + str(i) + '.obj'))
+        posed_mesh.export(os.path.join(save_dir, 'posed_' + str(i) + '.obj'))
+        np.save(os.path.join(save_dir, 'cloth_latent_' + str(i) + '.npy'), cloth_latent)
+    
+
+    # render unposed and posed meshes to images
+    posed_image = get_multi_mesh_render(posed_meshes, K, R, T, image_size=image_size)
+    unposed_image = get_multi_mesh_render(unposed_meshes, K, R, T, image_size=image_size)
+
+    cv2.imwrite(os.path.join(save_dir, 'image_posed.png'), posed_image)
+    cv2.imwrite(os.path.join(save_dir, 'image_unposed.png'), unposed_image)
 
     """
     # --- 5. 最终渲染与视频输出 ---
