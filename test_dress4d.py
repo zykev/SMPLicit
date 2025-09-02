@@ -661,4 +661,60 @@ poisson_mesh = poisson_mesh.select_by_index(np.where(vertices_to_keep)[0])
 
 # 4. 保存
 o3d.io.write_triangle_mesh("tmp/unposed_revise_0.obj", poisson_mesh)
+
+
 # %%
+import os
+import glob
+
+select_view = '0076'
+subject_outfit = ['Inner', 'Outer']
+root_folder = _opt.root_folder
+process_folders = []
+for subject_id in os.listdir(root_folder):
+    subject_dir = os.path.join(root_folder, subject_id)
+    for outfit in subject_outfit:
+        outfit_dir = os.path.join(subject_dir, outfit)
+        take_dir_list = sorted(os.listdir(outfit_dir))
+        for take_id in take_dir_list:
+            take_dir = os.path.join(outfit_dir, take_id)
+            process_folders.append(take_dir)
+
+for process_folder in process_folders:
+    print('Processing folder: ', process_folder)
+    path_camera = os.path.join(process_folder, 'Capture/cameras.pkl')
+    path_image = os.path.join(process_folder, 'Capture/', select_view, 'images')
+    path_smpl_prediction = os.path.join(process_folder, 'SMPL')
+    path_segmentation_mesh = os.path.join(process_folder, 'Meshes_pkl')
+    path_segmentation_label = os.path.join(process_folder, 'Semantic/labels')
+    path_instance_segmentation = os.path.join(process_folder, 'Capture/', select_view, 'masks')
+
+
+    img_files = sorted(glob.glob(os.path.join(path_image, '*.png')))
+    mask_files = sorted(glob.glob(os.path.join(path_instance_segmentation, '*.png')))
+    smpl_files = sorted(glob.glob(os.path.join(path_smpl_prediction, '*_smpl.pkl')))
+    mesh_files = sorted(glob.glob(os.path.join(path_segmentation_mesh, 'mesh*.pkl')))
+    label_files = sorted(glob.glob(os.path.join(path_segmentation_label, '*.pkl')))
+
+    assert len(img_files) == len(mask_files) == len(smpl_files) == len(mesh_files) == len(label_files)
+    n_frames = len(img_files)
+    print('Total frames: ', n_frames)
+
+    for n in range(n_frames):
+        print('Processing frame: ', n)
+        img_file = img_files[n]
+        mask_file = mask_files[n]
+        smpl_file = smpl_files[n]
+        mesh_file = mesh_files[n]
+        label_file = label_files[n]
+
+        frame_id = os.path.basename(img_file).split('.')[0].split('-')[-1]
+        output_path = os.path.join(process_folder, 'Cloth_Segmentation')
+        os.makedirs(output_path, exist_ok=True)
+
+        # load camera
+        K, R, T = get_cameras(camera_path=path_camera, W=1280, H=940)
+        image_size = np.array([1280, 940])
+
+        # load segmentation
+        segmentation = cv2.imread(mask_file)
