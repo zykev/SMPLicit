@@ -168,12 +168,12 @@ def subj_outfit_seq_render_pixel_labels(dataset_dir, subj, outfit, seq):
         for cam_id, camera_agent in camera_agents.items():
             # locate save_label_fn and save_overlap_fn
             save_label_fn = os.path.join(capture_dir, cam_id, 'labels', 'label-f{}.png'.format(frame))
-            save_overlap_fn = os.path.join(capture_dir, cam_id, 'labels', 'overlap-f{}.png'.format(frame))
-            if os.path.exists(save_label_fn) and os.path.exists(save_overlap_fn): continue
+            # save_overlap_fn = os.path.join(capture_dir, cam_id, 'labels', 'overlap-f{}.png'.format(frame))
+            if os.path.exists(save_label_fn): continue
 
             # # -------------------- Load Capture Image and Camera -------------------- # #
             # get capture_image(h, w, 3)
-            capture_image = load_image(os.path.join(capture_dir, cam_id, 'images', 'capture-f{}.png'.format(frame)))
+            # capture_image = load_image(os.path.join(capture_dir, cam_id, 'images', 'capture-f{}.png'.format(frame)))
             # get capture_rasts from camera and scan_mesh
             capture_rasts = MeshRasterizer(cameras=camera_agent, raster_settings=raster_settings)(scan_mesh)
             # render capture_mask(h, w) and capture_mask_image(h, w)
@@ -182,13 +182,13 @@ def subj_outfit_seq_render_pixel_labels(dataset_dir, subj, outfit, seq):
             # # -------------------- Render Vertex Labels -------------------- # #
             # render scan_labels(nvt, ) to multi_view capture_labels(nv, h, w) and capture_labels_votes(nv, h, w, nl)
             capture_labels, capture_labels_votes = render_mesh_pixel_labels(
-                scan_labels, th_faces.squeeze(0), capture_rasts, capture_mask.unsqueeze(0), SURFACE_LABEL)
+                scan_labels, th_faces.squeeze(0).cuda(), capture_rasts, capture_mask.unsqueeze(0), SURFACE_LABEL)
             # render multi-view render_labels(nv, h, w) to render_labels_images(nv, h, w, 3)
             capture_labels_images = render_pixel_label_colors(capture_labels.cpu().numpy())[0]
             save_image(save_label_fn, capture_labels_images)
             # overlap capture_image and capture_label
-            capture_labels_images_overlap = cv.addWeighted(capture_image, 0.5, capture_labels_images, 0.5, 0.0)
-            save_image(save_overlap_fn, capture_labels_images_overlap)
+            # capture_labels_images_overlap = cv.addWeighted(capture_image, 0.5, capture_labels_images, 0.5, 0.0)
+            # save_image(save_overlap_fn, capture_labels_images_overlap)
 
 def subj_render_pixel_labels(dataset_dir, subj, outfit, seq):
     # if outfit and seq are None, render all outfits and sequences for the subject
