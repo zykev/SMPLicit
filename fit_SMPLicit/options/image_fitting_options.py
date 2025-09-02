@@ -50,8 +50,14 @@ class FitOptions():
         self.segmentation = segmentation
 
         labels = np.unique(self.segmentation)
-        labels = np.intersect1d(labels, [2, 3, 5, 6, 7])
+        labels = np.intersect1d(labels, [5, 6, 7]) # [2, 3, 5, 6, 7]
         self._opt.labels = labels
+        return self._opt
+    
+    def set_labels(self):
+
+        self._opt.labels = [5, 6, 7]
+
         return self._opt
 
 
@@ -63,6 +69,9 @@ class FitOptions():
         # self._parser.add_argument('--image_extension', type=str, default='.jpg', help='image extension (.png, .jpg, etc)')
         # self._parser.add_argument('--camera_folder', type=str, default='fit_SMPLicit/data/cameras/', help='folder with input cameras')
 
+        self._parser.add_argument('--root_folder', type=str, default='.datasets/4ddress/', help='folder with input images')
+        self._parser.add_argument('--camera_view', type=str, default='0076', help='camera view to use (0004, 0028, 0052, 0076)')
+        self._parser.add_argument('--save_folder', type=str, default='.datasets/4ddress_cloth/', help='folder to save unposed meshes')
         self._parser.add_argument('--image_folder', type=str, default='4ddress_sample/images/', help='folder with input images')
         self._parser.add_argument('--smpl_prediction_folder', type=str, default='4ddress_sample/smpl_prediction/', help='folder with input images')
         self._parser.add_argument('--cloth_segmentation_folder', type=str, default='4ddress_sample/cloth_segmentation/', help='folder with input images')

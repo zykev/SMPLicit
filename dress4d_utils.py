@@ -8,6 +8,8 @@ from PIL import Image
 import cv2
 import matplotlib.pyplot as plt
 import trimesh
+import kaolin
+import glob
 
 
 from pytorch3d.structures import Meshes
@@ -25,7 +27,100 @@ from pytorch3d.utils import cameras_from_opencv_projection
 
 SURFACE_LABEL = ['skin', 'hair', 'shoe', 'upper', 'lower', 'outer']
 SURFACE_LABEL_COLOR = np.array([[128, 128, 128], [255, 128, 0], [128, 0, 255], [180, 50, 50], [50, 180, 50], [0, 128, 255]])
+VIEWS = ['0004', '0028', '0052', '0076']  # left, back, right, front
 # grey, orange, purple, red, green, blue
+
+
+def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_view = '0076'):
+    process_folders = []
+    for subject_id in os.listdir(root_folder):
+        subject_dir = os.path.join(root_folder, subject_id)
+        for outfit in subject_outfit:
+            outfit_dir = os.path.join(subject_dir, outfit)
+            take_dir_list = sorted(os.listdir(outfit_dir))
+            for take_id in take_dir_list:
+                take_dir = os.path.join(outfit_dir, take_id)
+                process_folders.append(take_dir)
+
+    res = []
+    for process_folder in process_folders:
+        # process folder is one task for one outfit in one subject
+        print('Processing folder: ', process_folder)
+        path_camera = os.path.join(process_folder, 'Capture/cameras.pkl')
+        path_image = os.path.join(process_folder, 'Capture/', select_view, 'images')
+        path_smpl_prediction = os.path.join(process_folder, 'SMPL')
+        # path_segmentation = os.path.join(process_folder, 'Capture/', select_view, 'images')
+        # path_instance_segmentation = os.path.join(process_folder, 'Capture/', select_view, 'masks')
+
+
+        img_files = sorted(glob.glob(os.path.join(path_image, '*.png')))
+        # mask_files = sorted(glob.glob(os.path.join(path_instance_segmentation, '*.png')))
+        smpl_files = sorted(glob.glob(os.path.join(path_smpl_prediction, '*_smpl.pkl')))
+        # seg_files = sorted(glob.glob(os.path.join(path_segmentation, '*.png')))
+
+        assert len(img_files) == len(smpl_files)
+
+        # load camera
+        K, R, T = get_cameras(camera_path=path_camera, cam_name=select_view, W=1280, H=940)
+
+        res.append({
+            'process_folder': process_folder,
+            'camera_view': select_view,
+            'camera_params': (K, R, T),
+            'path_image': img_files,
+            'path_smpl': smpl_files,
+        })
+
+    return res
+
+def extract_multiview_files(root_folder, subject_outfit= ['Inner', 'Outer']):
+    process_folders = []
+    for subject_id in os.listdir(root_folder):
+        subject_dir = os.path.join(root_folder, subject_id)
+        for outfit in subject_outfit:
+            outfit_dir = os.path.join(subject_dir, outfit)
+            take_dir_list = sorted(os.listdir(outfit_dir))
+            for take_id in take_dir_list:
+                take_dir = os.path.join(outfit_dir, take_id)
+                process_folders.append(take_dir)
+
+    res = []
+    for process_folder in process_folders:
+        # process folder is one task for one outfit in one subject
+        print('Processing folder: ', process_folder)
+        path_camera = os.path.join(process_folder, 'Capture/cameras.pkl')
+        all_views_img_files = []
+        all_views_cam_params = []
+        for select_view in VIEWS:
+        	# load data for each view
+            path_image = os.path.join(process_folder, 'Capture/', select_view, 'images')
+            path_smpl_prediction = os.path.join(process_folder, 'SMPL')
+            # path_segmentation = os.path.join(process_folder, 'Capture/', select_view, 'images')
+            # path_instance_segmentation = os.path.join(process_folder, 'Capture/', select_view, 'masks')
+
+
+            img_files = sorted(glob.glob(os.path.join(path_image, '*.png')))
+            # mask_files = sorted(glob.glob(os.path.join(path_instance_segmentation, '*.png')))
+            smpl_files = sorted(glob.glob(os.path.join(path_smpl_prediction, '*_smpl.pkl')))
+            # seg_files = sorted(glob.glob(os.path.join(path_segmentation, '*.png')))
+
+            assert len(img_files) == len(smpl_files)
+
+            # load camera
+            K, R, T = get_cameras(camera_path=path_camera, cam_name=select_view, W=1280, H=940)
+            all_views_img_files.append(img_files)
+            all_views_cam_params.append((K, R, T))
+        img_files = list(map(list, zip(*all_views_img_files)))
+        
+        res.append({
+            'process_folder': process_folder,
+            'camera_view': VIEWS,
+            'camera_params': all_views_cam_params,
+            'path_image': img_files,
+            'path_smpl': smpl_files,
+        })
+
+    return res
 
 
 def seg_to_label(segmentation, colors=SURFACE_LABEL_COLOR):
@@ -83,7 +178,7 @@ def seg_to_label(segmentation, colors=SURFACE_LABEL_COLOR):
     return final_label_map
 
 
-def get_cameras(camera_path='4ddress_sample/cameras.pkl', W=1280, H=940):
+def get_cameras(camera_path='4ddress_sample/cameras.pkl', cam_name='0076',W=1280, H=940):
     camera_info = pickle.load(open(camera_path, "rb"))
     cam_name = '0076'
     K = np.array(camera_info[cam_name]["intrinsics"], dtype=np.float32)
@@ -343,3 +438,54 @@ def get_multi_mesh_render(mesh_list, K, R, T, image_size):
     images = renderer(meshes)
 
     return images.squeeze(0)[..., :3].cpu().numpy()
+
+
+def compute_udf_from_mesh(mesh: kaolin.rep.SurfaceMesh, points: torch.Tensor) -> torch.Tensor:
+    """
+    根据 GitHub issue 中的官方推荐方法，实现从 Kaolin SurfaceMesh 计算 SDF 的函数。
+
+    该函数通过组合 `point_to_mesh_distance` 和 `check_sign` 来计算符号距离。
+
+    参数:
+        mesh (kaolin.rep.SurfaceMesh): 输入的网格对象。
+                                    为了保证符号计算准确，该网格必须是水密的 (watertight)。
+        points (torch.Tensor):     需要计算 SDF 的点云，形状为 (N, 3)。
+
+    返回:
+        torch.Tensor: 一个形状为 (N,) 的张量，包含每个点的 SDF 值。
+                      负值代表点在网格内部，正值代表在外部。
+    """
+    # 确保网格的顶点和面片与点云在同一个设备上 (例如 'cuda')
+    # Kaolin 的函数通常需要一个批处理维度，所以我们使用 unsqueeze(0)
+    vertices_batch = mesh.vertices[0].to(points.device).unsqueeze(0).contiguous()
+    faces = mesh.faces[0].to(points.device, dtype=torch.int64).contiguous()
+    points_batch = points.to(vertices_batch.device).unsqueeze(0).contiguous()
+
+    # 1. 提取出每个三角面片的顶点坐标
+    # 这个是 point_to_mesh_distance 和 check_sign 都需要的输入
+    face_vertices = kaolin.ops.mesh.index_vertices_by_faces(vertices_batch, faces)
+
+    # 2. 计算点到网格表面的无符号距离（的平方）
+    # 遵循图中建议，这是第一步
+    distance_sq, face_indices, _ = kaolin.metrics.trianglemesh.point_to_mesh_distance(
+        points_batch, face_vertices
+    )
+    
+    # 3. 对距离的平方进行开方，得到真实的距离
+    # 遵循图中 "be careful to apply torch.sqrt" 的建议
+    distance = torch.sqrt(distance_sq)
+
+    # 4. 判断点的符号（内外）
+    # 遵循图中建议，这是第二步
+    # 注意：check_sign 要求网格是水密的 (watertight)
+    # is_inside = kaolin.ops.mesh.check_sign(vertices_batch, faces, points_batch)
+    
+    # 5. 结合距离和符号
+    # 将布尔值的 is_inside (True for inside) 转换为数值符号 (-1 for inside, 1 for outside)
+    # sign = torch.where(is_inside, -1.0, 1.0).to(distance.device)
+    
+    # signed_distance = sign * distance
+    
+    # 返回结果时去掉批处理维度，使其与输入点的维度匹配
+    return distance.squeeze(0)
+
