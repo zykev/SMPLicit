@@ -1,5 +1,3 @@
-
-# %%
 import os
 import pickle
 import numpy as np
@@ -45,7 +43,7 @@ def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_view =
     res = []
     for process_folder in process_folders:
         # process folder is one task for one outfit in one subject
-        print('Processing folder: ', process_folder)
+        # print('Processing folder: ', process_folder)
         path_camera = os.path.join(process_folder, 'Capture/cameras.pkl')
         path_image = os.path.join(process_folder, 'Capture/', select_view, 'images')
         path_smpl_prediction = os.path.join(process_folder, 'SMPL')
@@ -54,8 +52,10 @@ def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_view =
 
 
         img_files = sorted(glob.glob(os.path.join(path_image, '*.png')))
+        img_files = [img_files[0]]
         # mask_files = sorted(glob.glob(os.path.join(path_instance_segmentation, '*.png')))
         smpl_files = sorted(glob.glob(os.path.join(path_smpl_prediction, '*_smpl.pkl')))
+        smpl_files = [smpl_files[0]]
         # seg_files = sorted(glob.glob(os.path.join(path_segmentation, '*.png')))
 
         assert len(img_files) == len(smpl_files)
@@ -73,7 +73,7 @@ def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_view =
 
     return res
 
-def extract_multiview_files(root_folder, subject_outfit= ['Inner', 'Outer']):
+def extract_multiview_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_views = None):
     process_folders = []
     for subject_id in os.listdir(root_folder):
         subject_dir = os.path.join(root_folder, subject_id)
@@ -87,11 +87,12 @@ def extract_multiview_files(root_folder, subject_outfit= ['Inner', 'Outer']):
     res = []
     for process_folder in process_folders:
         # process folder is one task for one outfit in one subject
-        print('Processing folder: ', process_folder)
+        # print('Processing folder: ', process_folder)
         path_camera = os.path.join(process_folder, 'Capture/cameras.pkl')
         all_views_img_files = []
         all_views_cam_params = []
-        for select_view in VIEWS:
+        select_views = select_views if select_views is not None else VIEWS
+        for select_view in select_views:
         	# load data for each view
             path_image = os.path.join(process_folder, 'Capture/', select_view, 'images')
             path_smpl_prediction = os.path.join(process_folder, 'SMPL')
@@ -100,8 +101,10 @@ def extract_multiview_files(root_folder, subject_outfit= ['Inner', 'Outer']):
 
 
             img_files = sorted(glob.glob(os.path.join(path_image, '*.png')))
+            img_files = [img_files[0]]
             # mask_files = sorted(glob.glob(os.path.join(path_instance_segmentation, '*.png')))
             smpl_files = sorted(glob.glob(os.path.join(path_smpl_prediction, '*_smpl.pkl')))
+            smpl_files = [smpl_files[0]]
             # seg_files = sorted(glob.glob(os.path.join(path_segmentation, '*.png')))
 
             assert len(img_files) == len(smpl_files)
@@ -144,43 +147,42 @@ def seg_to_label(segmentation, colors=SURFACE_LABEL_COLOR):
     label_map[matched_any] = np.argmax(matches[matched_any], axis=-1) + 1
 
 
-    # 分左右鞋
-    shoe_idx = 3  # 原 shoe
-    shoe_mask = label_map == shoe_idx
-    shoe_mask_uint8 = shoe_mask.astype(np.uint8) * 255
+    # # 分左右鞋
+    # shoe_idx = 3  # 原 shoe
+    # shoe_mask = label_map == shoe_idx
+    # shoe_mask_uint8 = shoe_mask.astype(np.uint8) * 255
 
-    num_labels, labels_cc = cv2.connectedComponents(shoe_mask_uint8)
-    H, W = label_map.shape
-    shoe_centers = []
-    for i in range(1, num_labels):
-        ys, xs = np.where(labels_cc == i)
-        center_x = xs.mean()
-        shoe_centers.append((i, center_x))
+    # num_labels, labels_cc = cv2.connectedComponents(shoe_mask_uint8)
+    # H, W = label_map.shape
+    # shoe_centers = []
+    # for i in range(1, num_labels):
+    #     ys, xs = np.where(labels_cc == i)
+    #     center_x = xs.mean()
+    #     shoe_centers.append((i, center_x))
 
-    shoe_centers.sort(key=lambda x: x[1])  # 按 x 坐标排序
-    left_shoe_label = shoe_centers[0][0]
-    right_shoe_label = shoe_centers[1][0]
+    # shoe_centers.sort(key=lambda x: x[1])  # 按 x 坐标排序
+    # left_shoe_label = shoe_centers[0][0]
+    # right_shoe_label = shoe_centers[1][0]
 
-    # 分配新类别索引
-    final_label_map = np.zeros_like(label_map)  # 背景默认 0
-    final_label_map[label_map == 1] = 1  # skin
-    final_label_map[label_map == 2] = 2  # hair
-    final_label_map[(labels_cc == left_shoe_label)] = 3  # leftshoe
-    final_label_map[(labels_cc == right_shoe_label)] = 4 # rightshoe
+    # # 分配新类别索引
+    # final_label_map = np.zeros_like(label_map)  # 背景默认 0
+    # final_label_map[label_map == 1] = 1  # skin
+    # final_label_map[label_map == 2] = 2  # hair
+    # final_label_map[(labels_cc == left_shoe_label)] = 3  # leftshoe
+    # final_label_map[(labels_cc == right_shoe_label)] = 4 # rightshoe
 
-    # upper+outer 合并
-    final_label_map[label_map == 4] = 5  # upper
-    final_label_map[label_map == 5] = 6  # lower
+    # # upper+outer 合并
+    # final_label_map[label_map == 4] = 5  # upper
+    # final_label_map[label_map == 5] = 6  # lower
 
-    # lower
-    final_label_map[label_map == 6] = 7  # outer
+    # # lower
+    # final_label_map[label_map == 6] = 7  # outer
 
-    return final_label_map
+    return label_map
 
 
-def get_cameras(camera_path='4ddress_sample/cameras.pkl', cam_name='0076',W=1280, H=940):
+def get_cameras(camera_path='4ddress_sample/cameras.pkl', cam_name='0076', W=1280, H=940):
     camera_info = pickle.load(open(camera_path, "rb"))
-    cam_name = '0076'
     K = np.array(camera_info[cam_name]["intrinsics"], dtype=np.float32)
     extrinsic = camera_info[cam_name]["extrinsics"]
     R = np.array(extrinsic[:, :3], dtype=np.float32)
@@ -489,3 +491,30 @@ def compute_udf_from_mesh(mesh: kaolin.rep.SurfaceMesh, points: torch.Tensor) ->
     # 返回结果时去掉批处理维度，使其与输入点的维度匹配
     return distance.squeeze(0)
 
+
+def combine_meshes(meshes):
+    """
+    将多个 trimesh 对象合并为一个，保留顶点颜色。
+    """
+    combined_vertices = []
+    combined_faces = []
+    combined_colors = []
+    offset = 0
+
+    for m in meshes:
+        combined_vertices.append(m.vertices)
+        combined_faces.append(m.faces + offset)
+        combined_colors.append(m.visual.vertex_colors)
+        offset += len(m.vertices)
+
+    combined_vertices = np.vstack(combined_vertices)
+    combined_faces = np.vstack(combined_faces)
+    combined_colors = np.vstack(combined_colors)
+
+    combined_mesh = trimesh.Trimesh(
+        vertices=combined_vertices,
+        faces=combined_faces,
+        vertex_colors=combined_colors
+    )
+
+    return combined_mesh

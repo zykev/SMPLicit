@@ -14,17 +14,9 @@ import time
 import tqdm
 from fit_SMPLicit.utils import image_fitting
 
-from dress4d_utils import extract_multiview_files, compute_udf_from_mesh, get_depth_map, seg_to_label, compute_projections, get_multi_mesh_render
+from dress4d_utils import extract_multiview_files, compute_udf_from_mesh, get_depth_map, seg_to_label, compute_projections, get_mesh_render, combine_meshes
+from tmp import get_training_arrays_per_image, visual_seg
 
-import sys
-import os
-
-# # 获取当前文件夹的上级目录
-# current_dir = os.path.dirname(os.path.abspath(__file__))
-# project_root = os.path.dirname(current_dir)
-
-# # 将平行目录加入 Python 搜索路径
-# sys.path.append(os.path.join(project_root, "SMPLicit"))
 
 import SMPLicit
 import os
@@ -33,7 +25,7 @@ import os
 
 fitoptions = FitOptions()
 _opt = fitoptions.parse()
-_opt = fitoptions.set_labels()
+_opt.select_views = ['0076'] # use frontal and back view
 
 SMPLicit_Layer = SMPLicit.SMPLicit()
 SMPLicit_Layer = SMPLicit_Layer.cuda()
@@ -48,24 +40,16 @@ cool_latent_reps = np.load('fit_SMPLicit/utils/z_gaussians.npy')
 
 print("PROCESSING:")
 
-folders = extract_multiview_files(_opt.root_folder)
+folders = extract_multiview_files(_opt.root_folder, select_views=_opt.select_views)
+folders = [folders[10]]
 
 for folder in folders:
     print('Processing folder:', folder['process_folder'])
     # set save folder
-    subject_id = folder['process_folder'].split('/')[1]
-    outfit = folder['process_folder'].split('/')[2]
-    take_id = folder['process_folder'].split('/')[3]
+    subject_id = folder['process_folder'].split('/')[2]
+    outfit = folder['process_folder'].split('/')[3]
+    take_id = folder['process_folder'].split('/')[4]
     save_folder = os.path.join(_opt.save_folder, subject_id, outfit, take_id, 'Meshes_cloth')
-    unposed_mesh_folder = os.path.join(save_folder, 'unposed')
-    posed_mesh_folder = os.path.join(save_folder, 'posed')
-    cloth_latent_folder = os.path.join(save_folder, 'latents')
-    if not os.path.exists(unposed_mesh_folder):
-        os.makedirs(unposed_mesh_folder)
-    if not os.path.exists(posed_mesh_folder):
-        os.makedirs(posed_mesh_folder)
-    if not os.path.exists(cloth_latent_folder):
-        os.makedirs(cloth_latent_folder)
 
     # --- 2. 主循环：遍历每个foloder的每张图片进行处理 ---
     for path_images, path_smpl in zip(folder['path_image'], folder['path_smpl']):
@@ -85,7 +69,13 @@ for folder in folders:
 
         # Sample points uniformly in predefined 3D space of clothing:
         # 在一个预定义的 3D 边界框内创建均匀的采样点
-        _opt = fitoptions.set_labels()
+        # update labels based on what clothes are present in the frontal view segmentation:
+        path_segmentation = path_images[0].replace('images', 'labels').replace('capture', 'label')
+        segmentation = cv2.imread(path_segmentation) # (h, w, 3)
+        segmentation = cv2.cvtColor(segmentation, cv2.COLOR_BGR2RGB)  # 转成 RGB
+        segmentation = seg_to_label(segmentation)
+        _opt = fitoptions.set_segmentation(segmentation)
+
         views_cache = {}
         # --- 4. 衣物优化循环：逐件拟合衣物 ---
         for cloth_optimization_index in _opt.labels:
@@ -93,7 +83,6 @@ for folder in folders:
             _opt = fitoptions.update_optimized_cloth(cloth_optimization_index)
 
             # Get SMPL mesh in kaolin:
-            #SMPL_Layer = SMPL_Layer.cpu()
             # 获取 T-pose 下的 SMPL 身体顶点和骨骼关节点
             J, v = SMPL_Layer.skeleton(beta.cuda(), require_body=True)
             SMPL_Layer = SMPL_Layer.cuda()
@@ -106,8 +95,6 @@ for folder in folders:
             # 将 SMPL 网格转换为 Kaolin 格式，以计算 SDF
             smpl_mesh = kaolin.rep.SurfaceMesh(vertices = [v_inference[0].cuda()], faces=[smpl_faces.cuda()])
             
-            #! smpl_mesh_sdf = kaolin.conversions.trianglemesh_to_sdf(smpl_mesh)
-            # smpl_mesh_sdf = compute_sdf_from_mesh(smpl_mesh, coords_tensor.cuda())
 
             # Sample points uniformly in predefined 3D space of clothing:
             # 在一个预定义的 3D 边界框内创建均匀的采样点
@@ -120,12 +107,12 @@ for folder in folders:
             # 过滤掉离身体表面太远的采样点，以提高效率
             unsigned_distance = compute_udf_from_mesh(smpl_mesh, coords_tensor.cuda())
 
-            if cloth_optimization_index == 2:
+            if cloth_optimization_index == 2: # hair
                 valid = unsigned_distance < 0.1
             else:
                 #valid = unsigned_distance < 0.001
                 valid = unsigned_distance < 0.01
-            coords = coords[valid.cpu().data.numpy()]
+            # coords = coords[valid.cpu().data.numpy()]
             coords_tensor = coords_tensor[valid.cpu()]
 
             views_cache[cloth_optimization_index]['coords'] = coords_tensor
@@ -133,8 +120,8 @@ for folder in folders:
         # 每个视角都得到正负训练样本
         for view_idx, path_image in enumerate(path_images):
 
-            path_segmentation = path_image.replace('images', 'labels')
-            path_instance_segmentation = path_image.replace('images', 'masks')
+            path_segmentation = path_image.replace('images', 'labels').replace('capture', 'label')
+            path_instance_segmentation = path_image.replace('images', 'masks').replace('capture', 'mask')
 
             # 读取图片
             input_image = cv2.imread(path_image)
@@ -161,7 +148,7 @@ for folder in folders:
             v_posed = SMPL_Layer.forward(beta=beta.cuda(), theta=pose.cuda(), transl=transl.cuda(),
                                             get_skin=True)[0][0].cpu().data.numpy()
 
-            mesh_smpl = trimesh.Trimesh(v_posed, smpl_faces.cpu().data.numpy())
+            # mesh_smpl = trimesh.Trimesh(v_posed, smpl_faces.cpu().data.numpy())
 
             K, R, T = folder['camera_params'][view_idx]
             image_size = np.array(segmentation.shape)
@@ -171,13 +158,14 @@ for folder in folders:
 
             # --- 4. 衣物优化循环：逐件拟合衣物 ---
             for i, cloth_optimization_index in enumerate(_opt.labels):
+                _opt = fitoptions.update_optimized_cloth(cloth_optimization_index)
 
                 coords_tensor = views_cache[cloth_optimization_index]['coords']
 
                 # Re-Pose to SMPL's Image pose:
                 # --- 4.2. 将采样点从 T-pose 变换到目标姿态 (蒙皮/Skinning) ---
                 # if cloth_optimization_index == 9 or cloth_optimization_index == 12:
-                if cloth_optimization_index == 6:
+                if cloth_optimization_index == 5:
                     # lower body
                     unposed_verts = coords_tensor
                     model_trimesh = trimesh.Trimesh(unposed_verts, [], process=False)
@@ -186,8 +174,8 @@ for folder in folders:
                 else:
                     # TODO: Move this to image utils script
                     SMPL_Layer = SMPL_Layer.cpu()
-                    posed_coords = np.zeros((len(coords), 3))
-                    for i in range(len(coords)//_opt.step + 1):
+                    posed_coords = np.zeros((len(coords_tensor), 3))
+                    for i in range(len(coords_tensor)//_opt.step + 1):
                         unposed_verts = coords_tensor[i*_opt.step:(i+1)*_opt.step]
                         _, batch_unposed_coords = SMPL_Layer.deform_clothed_smpl_usingseveralpoints(pose, J.cpu(), v.cpu(), unposed_verts.unsqueeze(0), neighbors=10, transl=transl)
                         posed_coords[i*_opt.step:(i+1)*_opt.step] = batch_unposed_coords[0].cpu().data.numpy()
@@ -200,19 +188,14 @@ for folder in folders:
                 # Remove vertices outside of the image
                 # 移除投影到图像外部的点
                 coords_2d, valid = image_fitting.remove_outside_vertices(coords_2d, input_image)
-                coords = coords[valid]
+                # coords = coords[valid]
                 coords_tensor = coords_tensor[valid]
+                coords = coords_tensor.cpu().numpy()
                 posed_coords = posed_coords[valid]
 
                 # Move to image coordinates
                 coords_2d = np.int32(coords_2d)[:, :2]
 
-                # Find positive/negative gt:
-                # dists = np.zeros(len(coords_2d))
-                # dists[segmentation[coords_2d[:, 1], coords_2d[:, 0]] == 1] = 0
-
-                # TODO: MOVE THIS TO IMAGE UTILS SCRIPT:
-                # Find array of indices per pixel:
                 # --- 4.4. 构建优化所需的约束 (正/负样本) ---
                 # 这是一个关键步骤，为每个像素构建其对应的三维点集和真值标签
                 array_pixels = []
@@ -254,6 +237,8 @@ for folder in folders:
                 array_pixels = np.array(array_pixels)
                 array_gt = np.array(array_gt)
 
+                # array_pixels_a, array_gt_a = get_training_arrays_per_image(_opt, input_image, depth_image_smpl, segmentation, instance_segmentation, coords_2d, coords, cloth_optimization_index)
+
                 if len(array_pixels) < 200:
                     continue
 
@@ -263,11 +248,14 @@ for folder in folders:
                 )
 
         for cloth_optimization_index in _opt.labels:
+
+            _opt = fitoptions.update_optimized_cloth(cloth_optimization_index)
             view_pool = list(views_cache[cloth_optimization_index].keys())
+            coords_tensor = views_cache[cloth_optimization_index]['coords']
             # NOTE: Initialize upper cloth to open jacket's parameters helps convergence when we have detected jacket's segmentation label
             # --- 4.5. 初始化并执行优化循环 ---
             # 为当前衣物初始化可优化的参数（形状和风格的潜向量）
-            if cloth_optimization_index == 7: #7, Coat
+            if cloth_optimization_index == 6: #7, Coat
                 parameters = image_fitting.OptimizationCloth(_opt.num_params_style, _opt.num_params_shape, cool_latent_reps[3][6:])
             else:
                 parameters = image_fitting.OptimizationCloth(_opt.num_params_style, _opt.num_params_shape)
@@ -284,9 +272,6 @@ for folder in folders:
             # 加载聚类文件，用于位置编码
             clusters = np.load(SMPLicit_Layer._opt.path_cluster_files + '/' + _opt.clusters, allow_pickle=True)
             for i in tqdm.tqdm(range(_opt.iterations)):
-                # Select random number of vertices:
-                indices = np.arange(len(array_pixels))
-                np.random.shuffle(indices)
 
                 # Get differentiable style and shape vectors:
                 style, shape = parameters.forward()
@@ -300,6 +285,10 @@ for folder in folders:
                     cache = views_cache[cloth_optimization_index][vid]
                     array_pixels = cache['array_pixels']
                     array_gt = cache['array_gt']
+
+                    # Select random number of vertices:
+                    indices = np.arange(len(array_pixels))
+                    np.random.shuffle(indices)
 
                     for index_sample in range(_opt.index_samples):
                         inds_points = array_pixels[indices[index_sample]]
@@ -331,9 +320,9 @@ for folder in folders:
 
                 # Hyperparameters for fitting T-Shirt and Jacket better. This might require a little bit of tweaking, and challenging images might converge wrongly
                 # 添加正则化损失，防止潜向量过大导致形状怪异
-                if cloth_optimization_index == 5: # uppercloth
+                if cloth_optimization_index == 4: # uppercloth
                     reg = torch.abs(style).mean()*10 + torch.abs(shape).mean()
-                elif cloth_optimization_index == 7: # coat
+                elif cloth_optimization_index == 6: # coat
                     center_z_style = torch.FloatTensor(cool_latent_reps[3][6:]).cuda()
                     center_z_cut = torch.FloatTensor(cool_latent_reps[3][:6]).cuda()
                     reg = (torch.abs(style - center_z_style).mean() + torch.abs(shape - center_z_cut).mean())*4
@@ -371,7 +360,7 @@ for folder in folders:
 
             # Unpose+Pose if it's lower body, and pose directly if it's upper body:
             # 将 T-pose 下的衣物网格，通过蒙皮算法穿到目标姿态上
-            if cloth_optimization_index == 6:
+            if cloth_optimization_index == 5: # lower body
             # if cloth_optimization_index == 9 or cloth_optimization_index == 12:
                 posed_trimesh, normals = image_fitting.unpose_and_deform_cloth_w_normals(model_trimesh, _opt.pose_inference_repose.cpu(), pose, beta.cpu(), J, v, SMPL_Layer, normals, transl=transl, return_unpose=True)
             else:
@@ -389,18 +378,14 @@ for folder in folders:
             # colors.append(_opt.color[0][:3])
 
         # --- save unposed and posed meshes ---
-        combined_unposed = trimesh.util.concatenate(unposed_meshes)
-        combined_posed = trimesh.util.concatenate(posed_meshes)
+        combined_unposed = combine_meshes(unposed_meshes)
+        combined_posed = combine_meshes(posed_meshes)
 
-        combined_unposed.export(os.path.join(unposed_mesh_folder, 'unposed-' + identity_id + '.obj'))
-        combined_posed.export(os.path.join(posed_mesh_folder, 'posed-' + identity_id + '.obj'))
-        np.savez(os.path.join(posed_mesh_folder, 'latents-' + identity_id + '.npz'), *cloth_latents)
+        combined_unposed.export(os.path.join(save_folder, 'unposed-' + identity_id + '.obj'))
+        combined_posed.export(os.path.join(save_folder, 'posed-' + identity_id + '.obj'))
+        np.savez(os.path.join(save_folder, 'latents-' + identity_id + '.npz'), *cloth_latents)
 
-        # render posed meshes to images
-        views = ['0004', '0028', '0052', '0076']
-        for vid in range(len(view_pool)-1):
-            (K, R, T) = folder['camera_params'][vid]
-            posed_image = get_multi_mesh_render(posed_meshes, K, R, T, image_size=image_size)
-            posed_render_folder = os.path.join(save_folder, views[vid], 'renders')
-            os.makedirs(posed_render_folder, exist_ok=True)
-            cv2.imwrite(os.path.join(posed_render_folder, 'posed-' + identity_id + '.png'), posed_image)
+        # render posed meshes to frontal view images
+        (K, R, T) = folder['camera_params'][-1]
+        posed_image = get_mesh_render(combined_posed, K, R, T, image_size=image_size)
+        plt.imsave(os.path.join(save_folder, 'posed-' + identity_id + '.png'), posed_image)

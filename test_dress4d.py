@@ -146,7 +146,11 @@ subj_outfit_seq_render_pixel_labels()
 
 
 # %%
-segmentation = cv2.imread('4ddress_sample/cloth_segmentation/cloth-f00006.png') # (h, w, 3)
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+
+segmentation = cv2.imread('.datasets/4ddress/00123/Inner/Take1/Capture/0004/labels/label-f00001.png') # (h, w, 3)
 segmentation = cv2.cvtColor(segmentation, cv2.COLOR_BGR2RGB)  # 转成 RGB
 
 # %%
@@ -171,44 +175,44 @@ def seg_to_label(segmentation, colors=SURFACE_LABEL_COLOR):
     label_map[matched_any] = np.argmax(matches[matched_any], axis=-1) + 1
 
 
-    # 分左右鞋
-    shoe_idx = 3  # 原 shoe
-    shoe_mask = label_map == shoe_idx
-    shoe_mask_uint8 = shoe_mask.astype(np.uint8) * 255
+    # # 分左右鞋
+    # shoe_idx = 3  # 原 shoe
+    # shoe_mask = label_map == shoe_idx
+    # shoe_mask_uint8 = shoe_mask.astype(np.uint8) * 255
 
-    num_labels, labels_cc = cv2.connectedComponents(shoe_mask_uint8)
-    H, W = label_map.shape
-    shoe_centers = []
-    for i in range(1, num_labels):
-        ys, xs = np.where(labels_cc == i)
-        center_x = xs.mean()
-        shoe_centers.append((i, center_x))
+    # num_labels, labels_cc = cv2.connectedComponents(shoe_mask_uint8)
+    # H, W = label_map.shape
+    # shoe_centers = []
+    # for i in range(1, num_labels):
+    #     ys, xs = np.where(labels_cc == i)
+    #     center_x = xs.mean()
+    #     shoe_centers.append((i, center_x))
 
-    shoe_centers.sort(key=lambda x: x[1])  # 按 x 坐标排序
-    left_shoe_label = shoe_centers[0][0]
-    right_shoe_label = shoe_centers[1][0]
+    # shoe_centers.sort(key=lambda x: x[1])  # 按 x 坐标排序
+    # left_shoe_label = shoe_centers[0][0]
+    # right_shoe_label = shoe_centers[1][0]
 
-    # 分配新类别索引
-    final_label_map = np.zeros_like(label_map)  # 背景默认 0
-    final_label_map[label_map == 1] = 1  # skin
-    final_label_map[label_map == 2] = 2  # hair
-    final_label_map[(labels_cc == left_shoe_label)] = 3  # leftshoe
-    final_label_map[(labels_cc == right_shoe_label)] = 4 # rightshoe
+    # # 分配新类别索引
+    # final_label_map = np.zeros_like(label_map)  # 背景默认 0
+    # final_label_map[label_map == 1] = 1  # skin
+    # final_label_map[label_map == 2] = 2  # hair
+    # final_label_map[(labels_cc == left_shoe_label)] = 3  # leftshoe
+    # final_label_map[(labels_cc == right_shoe_label)] = 4 # rightshoe
 
-    # upper+outer 合并
-    final_label_map[label_map == 4] = 5  # upper
-    final_label_map[label_map == 5] = 6  # lower
+    # # upper+outer 合并
+    # final_label_map[label_map == 4] = 5  # upper
+    # final_label_map[label_map == 5] = 6  # lower
 
-    # lower
-    final_label_map[label_map == 6] = 7  # outer
+    # # lower
+    # final_label_map[label_map == 6] = 7  # outer
 
-    return final_label_map
+    return label_map
 
 label_map = seg_to_label(segmentation)
 
 color_array = np.vstack([np.array([[255, 255, 255]], dtype=np.uint8), 
-                         SURFACE_LABEL_COLOR,
-                         np.array([255, 255, 0], dtype=np.uint8)])
+                         SURFACE_LABEL_COLOR,])
+                        #  np.array([255, 255, 0], dtype=np.uint8)])
 
 label_map_visual = color_array[label_map]
 
@@ -219,13 +223,13 @@ plt.axis('off')
 plt.title('Segmentation Map with Left/Right Shoes')
 plt.show()
 
-# ['bg', 'skin', 'hair', 'leftshoe', 'rightshoe', 'upper', 'lower', 'outer']
-# white, grey, orange, purple, red, green, blue, yellow
-# 0, 1, 2, 3, 4, 5, 6, 7
+# ['bg', 'skin', 'hair', 'shoe', 'upper', 'lower', 'outer']
+# white, grey, orange, purple, red, green, blue
+# 0, 1, 2, 3, 4, 5, 6
 
 # %%
 
-smpl_prediction = pickle.load(open('4ddress_sample/smpl_prediction/mesh-f00006_smpl.pkl', 'rb'))
+smpl_prediction = pickle.load(open('.datasets/4ddress_sample/smpl_prediction/mesh-f00006_smpl.pkl', 'rb'))
 
 global_orient = torch.from_numpy(smpl_prediction['global_orient']) # (3,)
 body_pose = torch.from_numpy(smpl_prediction['body_pose']) # (69,)
@@ -236,7 +240,7 @@ transl = torch.from_numpy(smpl_prediction['transl']).unsqueeze(0) # (1, 3)
 
 # %%
 
-def get_cameras(camera_path='4ddress_sample/cameras.pkl', cam_name='0076', W=1280, H=940):
+def get_cameras(camera_path='.datasets/4ddress_sample/cameras.pkl', cam_name='0076', W=1280, H=940):
     camera_info = pickle.load(open(camera_path, "rb"))
     K = np.array(camera_info[cam_name]["intrinsics"], dtype=np.float32)
     extrinsic = camera_info[cam_name]["extrinsics"]
@@ -341,7 +345,7 @@ depth_map = get_depth_map(v_posed, smpl_faces, K, R, T, image_size=image_size)
 if 'torch' in str(type(depth_map)):
     depth_map = depth_map.cpu().numpy()
 
-image = cv2.imread('4ddress_sample/images/capture-f00006.png') # (h, w, 3)
+image = cv2.imread('.datasets/4ddress_sample/images/capture-f00006.png') # (h, w, 3)
 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 转成 RGB
 
 # 方法 1: 灰度显示
@@ -564,7 +568,7 @@ images = get_multi_mesh_render(mesh_list, K, R, T, image_size)
 mesh = trimesh.load('tmp/unposed_1.obj')
 images = get_mesh_render(mesh, K, R, T, image_size)
 
-image = cv2.imread('4ddress_sample/images/capture-f00006.png') # (h, w, 3)
+image = cv2.imread('.datasets/4ddress_sample/images/capture-f00006.png') # (h, w, 3)
 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # 转成 RGB
 
 # %%
@@ -582,129 +586,77 @@ plt.show()
 
 
 # %%
-mesh = trimesh.load('tmp/unposed_1.obj')
-mesh.is_watertight
+
+image = cv2.imread('.datasets/4ddress/00123/Inner/Take1/Capture/0076/images/capture-f00001.png')
+vertices_pose_2d = np.load('tmp/coords_2d.npy')
+plt.imshow(image)
+plt.scatter(vertices_pose_2d[:, 0], vertices_pose_2d[:, 1], s=1, color='red', alpha=0.5)
 
 # %%
-import open3d as o3d
-import open3d_examples as o3dtut
+K = np.load('tmp/K.npy')
+R = np.load('tmp/R.npy')
+T = np.load('tmp/T.npy')
+R = torch.from_numpy(R)
+T = torch.from_numpy(T)
+K = torch.from_numpy(K)
 
-def check_properties(name, mesh):
-    mesh.compute_vertex_normals()
-
-    edge_manifold = mesh.is_edge_manifold(allow_boundary_edges=True)
-    edge_manifold_boundary = mesh.is_edge_manifold(allow_boundary_edges=False)
-    vertex_manifold = mesh.is_vertex_manifold()
-    self_intersecting = mesh.is_self_intersecting()
-    watertight = mesh.is_watertight()
-    orientable = mesh.is_orientable()
-
-    print(name)
-    print(f"  edge_manifold:          {edge_manifold}")
-    print(f"  edge_manifold_boundary: {edge_manifold_boundary}")
-    print(f"  vertex_manifold:        {vertex_manifold}")
-    print(f"  self_intersecting:      {self_intersecting}")
-    print(f"  watertight:             {watertight}")
-    print(f"  orientable:             {orientable}")
-
-    # geoms = [mesh]
-    # if not edge_manifold:
-    #     edges = mesh.get_non_manifold_edges(allow_boundary_edges=True)
-    #     geoms.append(o3dtut.edges_to_lineset(mesh, edges, (1, 0, 0)))
-    # if not edge_manifold_boundary:
-    #     edges = mesh.get_non_manifold_edges(allow_boundary_edges=False)
-    #     geoms.append(o3dtut.edges_to_lineset(mesh, edges, (0, 1, 0)))
-    # if not vertex_manifold:
-    #     verts = np.asarray(mesh.get_non_manifold_vertices())
-    #     pcl = o3d.geometry.PointCloud(
-    #         points=o3d.utility.Vector3dVector(np.asarray(mesh.vertices)[verts]))
-    #     pcl.paint_uniform_color((0, 0, 1))
-    #     geoms.append(pcl)
-    # if self_intersecting:
-    #     intersecting_triangles = np.asarray(
-    #         mesh.get_self_intersecting_triangles())
-    #     intersecting_triangles = intersecting_triangles[0:1]
-    #     intersecting_triangles = np.unique(intersecting_triangles)
-    #     print("  # visualize self-intersecting triangles")
-    #     triangles = np.asarray(mesh.triangles)[intersecting_triangles]
-    #     edges = [
-    #         np.vstack((triangles[:, i], triangles[:, j]))
-    #         for i, j in [(0, 1), (1, 2), (2, 0)]
-    #     ]
-    #     edges = np.hstack(edges).T
-    #     edges = o3d.utility.Vector2iVector(edges)
-    #     geoms.append(o3dtut.edges_to_lineset(mesh, edges, (1, 0, 1)))
-    # o3d.visualization.draw_geometries(geoms, mesh_show_back_face=True)
-
-check_properties("unposed_1", o3d.io.read_triangle_mesh('tmp/unposed_1.obj'))
 # %%
+upper_pose = trimesh.load('tmp/upper_pose.obj')
+upper_pose.show()
 
-import open3d as o3d
-mesh = o3d.io.read_triangle_mesh('tmp/unposed_5.obj') 
-mesh.is_watertight()
+lower_pose = trimesh.load('tmp/lower_pose.obj')
+lower_pose.show()
+# %%
+render = get_multi_mesh_render([lower_pose, upper_pose], K, R, T, image_size=np.array([1280, 940]))
+
+# %%
+plt.imshow(render)
+# %%
+def combine_meshes(meshes):
+    """
+    将多个 trimesh 对象合并为一个，保留顶点颜色。
+    """
+    combined_vertices = []
+    combined_faces = []
+    combined_colors = []
+    offset = 0
+
+    for m in meshes:
+        combined_vertices.append(m.vertices)
+        combined_faces.append(m.faces + offset)
+        combined_colors.append(m.visual.vertex_colors)
+        offset += len(m.vertices)
+
+    combined_vertices = np.vstack(combined_vertices)
+    combined_faces = np.vstack(combined_faces)
+    combined_colors = np.vstack(combined_colors)
+
+    combined_mesh = trimesh.Trimesh(
+        vertices=combined_vertices,
+        faces=combined_faces,
+        vertex_colors=combined_colors
+    )
+
+    return combined_mesh
+
+combined_mesh = combine_meshes([lower_pose, upper_pose])
+render = get_mesh_render(combined_mesh, K, R, T, image_size=np.array([1280, 940]))
+
+plt.imshow(render)
 
 # %%
 
-# 1. 将原 mesh 转为点云
-mesh = o3d.io.read_triangle_mesh("tmp/unposed_0.obj")
-mesh.compute_vertex_normals()
-pcd = mesh.sample_points_uniformly(number_of_points=50000)  # 采样点云
+mesh = trimesh.load('tmp/combine_pose.obj')
+mesh.show()
 
-# 2. Poisson 重建
-poisson_mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-    pcd, depth=10)  # depth 越大，细节越高
+posed_image = np.load('tmp/posed_image.npy')
+plt.imshow(posed_image)
 
-# 3. 根据密度裁剪掉离散点
-vertices_to_keep = densities > np.quantile(densities, 0.01)
-poisson_mesh = poisson_mesh.select_by_index(np.where(vertices_to_keep)[0])
-
-# 4. 保存
-o3d.io.write_triangle_mesh("tmp/unposed_revise_0.obj", poisson_mesh)
-
+# posed_image = np.clip(posed_image * 255, 0, 255).astype(np.uint8)
+plt.imsave('tmp/render.png', posed_image)
+# %%
+data = np.load('.datasets/4ddress/00123/Inner/Take1/Meshes_cloth/latents-f00001.npz')
 
 # %%
-import os
-import glob
-
-
-def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_view = '0076'):
-    process_folders = []
-    for subject_id in os.listdir(root_folder):
-        subject_dir = os.path.join(root_folder, subject_id)
-        for outfit in subject_outfit:
-            outfit_dir = os.path.join(subject_dir, outfit)
-            take_dir_list = sorted(os.listdir(outfit_dir))
-            for take_id in take_dir_list:
-                take_dir = os.path.join(outfit_dir, take_id)
-                process_folders.append(take_dir)
-
-    res = []
-    for process_folder in process_folders:
-        # process folder is one task for one outfit in one subject
-        print('Processing folder: ', process_folder)
-        path_camera = os.path.join(process_folder, 'Capture/cameras.pkl')
-        path_image = os.path.join(process_folder, 'Capture/', select_view, 'images')
-        path_smpl_prediction = os.path.join(process_folder, 'SMPL')
-        # path_segmentation = os.path.join(process_folder, 'Capture/', select_view, 'images')
-        # path_instance_segmentation = os.path.join(process_folder, 'Capture/', select_view, 'masks')
-
-
-        img_files = sorted(glob.glob(os.path.join(path_image, '*.png')))
-        # mask_files = sorted(glob.glob(os.path.join(path_instance_segmentation, '*.png')))
-        smpl_files = sorted(glob.glob(os.path.join(path_smpl_prediction, '*_smpl.pkl')))
-        # seg_files = sorted(glob.glob(os.path.join(path_segmentation, '*.png')))
-
-        assert len(img_files) == len(smpl_files)
-
-        # load camera
-        K, R, T = get_cameras(camera_path=path_camera, cam_name=select_view, W=1280, H=940)
-
-        res.append({
-            'process_folder': process_folder,
-            'camera_view': select_view,
-            'camera_params': (K, R, T),
-            'path_image': img_files,
-            'path_smpl': smpl_files,
-        })
-
-    return res
+a = data['arr_0']
+# %%
