@@ -592,71 +592,57 @@ vertices_pose_2d = np.load('tmp/coords_2d.npy')
 plt.imshow(image)
 plt.scatter(vertices_pose_2d[:, 0], vertices_pose_2d[:, 1], s=1, color='red', alpha=0.5)
 
-# %%
-K = np.load('tmp/K.npy')
-R = np.load('tmp/R.npy')
-T = np.load('tmp/T.npy')
-R = torch.from_numpy(R)
-T = torch.from_numpy(T)
-K = torch.from_numpy(K)
 
 # %%
-upper_pose = trimesh.load('tmp/upper_pose.obj')
-upper_pose.show()
+import torch
+from scipy.spatial.transform import Rotation
 
-lower_pose = trimesh.load('tmp/lower_pose.obj')
-lower_pose.show()
-# %%
-render = get_multi_mesh_render([lower_pose, upper_pose], K, R, T, image_size=np.array([1280, 940]))
-
-# %%
-plt.imshow(render)
-# %%
-def combine_meshes(meshes):
+def get_02v_pose(num_joints=24):
     """
-    将多个 trimesh 对象合并为一个，保留顶点颜色。
+    Get SMPL pose parameters (1, 72) for Vitruvian A-pose.
+    
+    Args:
+        Jtr (torch.Tensor): Joint locations of shape (24 or 55, 3)
+    
+    Returns:
+        torch.Tensor: SMPL pose (1, 72), axis-angle representation
     """
-    combined_vertices = []
-    combined_faces = []
-    combined_colors = []
-    offset = 0
 
-    for m in meshes:
-        combined_vertices.append(m.vertices)
-        combined_faces.append(m.faces + offset)
-        combined_colors.append(m.visual.vertex_colors)
-        offset += len(m.vertices)
+    # Initialize axis-angle pose with zeros (no rotation)
+    smpl_pose = torch.zeros((1, num_joints * 3), dtype=torch.float32)
 
-    combined_vertices = np.vstack(combined_vertices)
-    combined_faces = np.vstack(combined_faces)
-    combined_colors = np.vstack(combined_colors)
+    # Define rotation matrices
+    rot45p = Rotation.from_euler('z', 45, degrees=True).as_matrix()
+    rot45n = Rotation.from_euler('z', -45, degrees=True).as_matrix()
 
-    combined_mesh = trimesh.Trimesh(
-        vertices=combined_vertices,
-        faces=combined_faces,
-        vertex_colors=combined_colors
-    )
+    # Convert to axis-angle
+    aa45p = torch.tensor(Rotation.from_matrix(rot45p).as_rotvec(), dtype=torch.float32)
+    aa45n = torch.tensor(Rotation.from_matrix(rot45n).as_rotvec(), dtype=torch.float32)
 
-    return combined_mesh
+    # Left hip (index 1 in SMPL)
+    smpl_pose[0, 1*3:1*3+3] = aa45p
+    # Right hip (index 2 in SMPL)
+    smpl_pose[0, 2*3:2*3+3] = aa45n
 
-combined_mesh = combine_meshes([lower_pose, upper_pose])
-render = get_mesh_render(combined_mesh, K, R, T, image_size=np.array([1280, 940]))
+    return smpl_pose
 
-plt.imshow(render)
+v_pose = get_02v_pose()
+
 
 # %%
+smpl_prediction = pickle.load(open('.datasets/4ddress/00123/Outer/Take8/SMPL/mesh-f00006_smpl.pkl', 'rb'))
 
-mesh = trimesh.load('tmp/combine_pose.obj')
-mesh.show()
+global_orient = torch.from_numpy(smpl_prediction['global_orient']) # (3,)
+body_pose = torch.from_numpy(smpl_prediction['body_pose']) # (69,)
+pose = torch.cat((global_orient, body_pose), 0).unsqueeze(0) # (1, 72)
+beta = torch.from_numpy(smpl_prediction['betas']).unsqueeze(0) # (1, 10)
+transl = torch.from_numpy(smpl_prediction['transl']).unsqueeze(0) # (1, 3)
 
-posed_image = np.load('tmp/posed_image.npy')
-plt.imshow(posed_image)
 
-# posed_image = np.clip(posed_image * 255, 0, 255).astype(np.uint8)
-plt.imsave('tmp/render.png', posed_image)
-# %%
-data = np.load('.datasets/4ddress/00123/Inner/Take1/Meshes_cloth/latents-f00001.npz')
 
-# %%
-a = data['arr_0']
+# Prepare final mesh, and we will keep concatenating vertices/faces later on, while updating normals and colors:
+vertices_smpl = SMPL_Layer.forward(beta=beta.cuda(), theta=v_pose.cuda(), get_skin=True)[0][0].cpu().data.numpy()
+m = trimesh.Trimesh(vertices_smpl, smpl_faces.cpu().data.numpy())
+
+m.export('tmp/smpl_v.obj')
 # %%

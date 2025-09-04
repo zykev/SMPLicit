@@ -14,7 +14,7 @@ import time
 import tqdm
 from fit_SMPLicit.utils import image_fitting
 
-from dress4d_utils import extract_files, compute_udf_from_mesh, get_depth_map, seg_to_label, compute_projections, get_multi_mesh_render, get_mesh_render, combine_meshes
+from dress4d_utils import extract_files, compute_udf_from_mesh, get_depth_map, seg_to_label, compute_projections, get_multi_mesh_render, get_mesh_render, combine_meshes, get_02v_pose
 
 import sys
 import os
@@ -40,6 +40,7 @@ SMPLicit_Layer = SMPLicit_Layer.cuda()
 # Initialize SMPL-Related stuff:
 SMPL_Layer = SMPLicit_Layer.SMPL_Layer
 smpl_faces = torch.LongTensor(SMPL_Layer.faces).cuda()
+v_pose = get_02v_pose()
 
 # files = glob.glob(_opt.image_folder + '/*' + _opt.image_extension)
 # files.sort()
@@ -50,6 +51,7 @@ print("PROCESSING:")
 # print(files)
 
 folders = extract_files(_opt.root_folder, select_view = _opt.camera_view)
+# folders = [folders[10]]
 
 for folder in folders:
     print('Processing folder:', folder['process_folder'])
@@ -350,8 +352,8 @@ for folder in folders:
                 smpl_mesh, model_trimesh = SMPLicit_Layer.reconstruct([_opt.index_cloth], [torch.cat((shape, style), 1).cpu().data.numpy()[0]], _opt.pose_inference_repose.cuda(), beta.cuda())
                 cloth_latents.append(torch.cat((shape, style), 1)[0].cpu().data.numpy())
 
-            smooth_normals = model_trimesh.vertex_normals.copy()
-            normals = model_trimesh.vertex_normals.copy()
+            # smooth_normals = model_trimesh.vertex_normals.copy()
+            # normals = model_trimesh.vertex_normals.copy()
 
             # color meshes:
             color = np.array(_opt.color[0], dtype=np.uint8)
@@ -361,9 +363,12 @@ for folder in folders:
             # 将 T-pose 下的衣物网格，通过蒙皮算法穿到目标姿态上
             if cloth_optimization_index == 5:
             # if cloth_optimization_index == 9 or cloth_optimization_index == 12:
-                posed_trimesh, normals = image_fitting.unpose_and_deform_cloth_w_normals(model_trimesh, _opt.pose_inference_repose.cpu(), pose, beta.cpu(), J, v, SMPL_Layer, normals, transl=transl, return_unpose=True)
+                posed_trimesh = image_fitting.unpose_and_deform_cloth_w_normals(model_trimesh, _opt.pose_inference_repose.cpu(), pose, beta.cpu(), J, v, SMPL_Layer, transl=transl, return_unpose=True)
             else:
-                posed_trimesh, normals = image_fitting.batch_posing_w_normals(model_trimesh, normals, pose, J, v, SMPL_Layer, transl=transl)
+                posed_trimesh = image_fitting.batch_posing_w_normals(model_trimesh, pose, J, v, SMPL_Layer, transl=transl)
+            
+            # adjust model_trimesh from smpl T pose to virtuvian pose
+            model_trimesh = image_fitting.batch_posing_w_normals(model_trimesh, v_pose, J, v, SMPL_Layer)
 
             # Smooth meshes:
             # 对最终的网格进行平滑处理，使其更自然
@@ -389,47 +394,3 @@ for folder in folders:
         # unposed_image = get_multi_mesh_render(unposed_meshes, K, R, T, image_size=image_size)
         plt.imsave(os.path.join(save_folder, 'render-' + identity_id + '.png'), posed_image)
 
-    """
-    # --- 5. 最终渲染与视频输出 ---
-    t = time.time()
-    original_vertices = []
-    for i in range(len(posed_meshes)):
-        original_vertices.append(posed_meshes[i].vertices.copy())
-
-    frames = [input_image]*10
-    nframes = 100
-    angles_y = np.arange(0, 360, 360/nframes)
-    diffuminated_image = np.uint8(input_image.copy()*0.4)
-
-    # To avoid person intersections in rendering, just assign person ordering according to person's scale:
-    uniqueratios = np.unique(all_scaleratios)
-    order = []
-    for i in range(len(all_scaleratios)):
-        which_smpl = np.where(all_scaleratios[i] == uniqueratios)[0][0]
-        order.append(which_smpl/2.)
-
-    # Render frames of persons rotating around Y axis:
-    print("Rendering video")
-    #! 
-    renderer = image_fitting.meshRenderer()
-    for i in tqdm.tqdm(range(len(angles_y))):
-        angle_y = angles_y[i]
-        c = np.cos(angle_y*np.pi/180)
-        s = np.sin(angle_y*np.pi/180)
-        rotmat_y = np.array([[c, 0, s], [0, 1, 0], [-1*s, 0, c]])
-
-        for j in range(len(posed_meshes)):
-            posed_meshes[j].vertices = np.matmul(rotmat_y, original_vertices[j].copy().T).T
-            posed_meshes[j].vertices[:, 2] += order[j]
-
-        renderImg_normals = image_fitting.render_image_projection_multiperson_wrenderer(diffuminated_image, posed_meshes, posed_normals, colors, all_camscales, all_camtrans, all_toplefts, all_scaleratios, mode='normals', renderer=renderer)
-        if i == 0:
-            for i in range(20):
-                frames.append(renderImg_normals)
-            diffuminated_image = np.uint8(diffuminated_image*0)
-        frames.append(renderImg_normals)
-
-    # Save video:
-    print("Saving output video")
-    image_fitting.save_video(frames, 'video_fits/%d_result_video'%t, freeze_first=5, freeze_last=5, framerate=24)
-    """

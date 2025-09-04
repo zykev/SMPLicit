@@ -518,3 +518,35 @@ def combine_meshes(meshes):
     )
 
     return combined_mesh
+
+
+from scipy.spatial.transform import Rotation
+
+def get_02v_pose(num_joints=24):
+    """
+    Get SMPL pose parameters (1, 72) for Vitruvian A-pose.
+    
+    Args:
+        Jtr (torch.Tensor): Joint locations of shape (24 or 55, 3)
+    
+    Returns:
+        torch.Tensor: SMPL pose (1, 72), axis-angle representation
+    """
+
+    # Initialize axis-angle pose with zeros (no rotation)
+    smpl_pose = torch.zeros((1, num_joints * 3), dtype=torch.float32)
+
+    # Define rotation matrices
+    rot45p = Rotation.from_euler('z', 45, degrees=True).as_matrix()
+    rot45n = Rotation.from_euler('z', -45, degrees=True).as_matrix()
+
+    # Convert to axis-angle
+    aa45p = torch.tensor(Rotation.from_matrix(rot45p).as_rotvec(), dtype=torch.float32)
+    aa45n = torch.tensor(Rotation.from_matrix(rot45n).as_rotvec(), dtype=torch.float32)
+
+    # Left hip (index 1 in SMPL)
+    smpl_pose[0, 1*3:1*3+3] = aa45p
+    # Right hip (index 2 in SMPL)
+    smpl_pose[0, 2*3:2*3+3] = aa45n
+
+    return smpl_pose
