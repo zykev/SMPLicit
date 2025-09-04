@@ -37,21 +37,22 @@ class FitOptions():
     def __init__(self):
         self._parser = argparse.ArgumentParser()
 
-    # def set_segmentation(self, segmentation):
-    #     self.segmentation = segmentation
-
-    #     labels = np.unique(self.segmentation)
-    #     labels = np.intersect1d(labels, [5, 7, 9, 12, 18])
-    #     self._opt.labels = labels
-    #     return self._opt
-    
     def set_segmentation(self, segmentation):
         self.segmentation = segmentation
 
         labels = np.unique(self.segmentation)
-        labels = np.intersect1d(labels, [4, 5, 6])
+        labels = np.intersect1d(labels, [5, 7, 9, 12])
         self._opt.labels = labels
+        self._opt.labels_name = {5: 'upper', 7: 'outer', 9: 'pants', 12: 'skirts'}
         return self._opt
+    
+    # def set_segmentation(self, segmentation):
+    #     self.segmentation = segmentation
+
+    #     labels = np.unique(self.segmentation)
+    #     labels = np.intersect1d(labels, [4, 5, 6])
+    #     self._opt.labels = labels
+    #     return self._opt
     
     def set_labels(self):
 
@@ -111,14 +112,14 @@ class FitOptions():
         #self._opt.lr = 0.01
 
         # TODO: ADD INITIALIZATION PARAMETERS (eg skirt different than pants):
-        if optimization_index == 4: # upperbody, ori: 5 T-Shirt
+        if optimization_index == 5: # upperbody, ori: 5 T-Shirt
             self._opt.index_cloth = 0
             self._opt.clusters = 'indexs_clusters_tshirt_smpl.npy'
             self._opt.num_clusters = 500
             self._opt.clamp_value =  0.1
             self._opt.num_params_style = 12
             self._opt.num_params_shape = 6
-            self._opt.other_labels = [1, 5, 6] #[9, 11, 7, 2]
+            self._opt.other_labels = [9, 11, 7, 2]
             self._opt.b_min = [-0.7, -0.2, -0.3]
             self._opt.b_max = [0.7, 0.6, 0.3]
             self._opt.weight_positives = 3
@@ -128,14 +129,14 @@ class FitOptions():
             self._opt.repose = False
             self._opt.pose_inference_repose = torch.zeros(1, 72).cuda()
 
-        elif optimization_index == 6: # ori: 7 Coat
+        elif optimization_index == 7: # ori: 7 Coat
             self._opt.index_cloth = 0
             self._opt.clusters = 'indexs_clusters_tshirt_smpl.npy'
             self._opt.num_clusters = 500
             self._opt.clamp_value =  0.1
             self._opt.num_params_style = 12
             self._opt.num_params_shape = 6
-            self._opt.other_labels = [1, 2] # [11, 2]
+            self._opt.other_labels = [11, 2]
             self._opt.b_min = [-0.8, -0.2, -0.3]
             self._opt.b_max = [0.8, 0.6, 0.3]
             self._opt.weight_positives = 10
@@ -145,14 +146,14 @@ class FitOptions():
             self._opt.repose = False
             self._opt.pose_inference_repose = torch.zeros(1, 72).cuda()
 
-        elif optimization_index == 5: # lowerbody, ori 9, Pants
+        elif optimization_index == 9: # lowerbody, ori 9, Pants
             self._opt.index_cloth = 1
             self._opt.clusters = 'clusters_lowerbody.npy'
             self._opt.num_clusters = 500
             self._opt.clamp_value =  0.1
             self._opt.num_params_style = 12
             self._opt.num_params_shape = 6
-            self._opt.other_labels = [1, 4, 6] # [5, 7]
+            self._opt.other_labels = [5, 7]
             self._opt.b_min = [-0.2, -1.2, -0.3]
             self._opt.b_max = [0.2, -0.2, 0.3]
             self._opt.weight_positives = 10
@@ -183,7 +184,7 @@ class FitOptions():
             self._opt.pose_inference_repose[0, 5] = 0.04
             self._opt.pose_inference_repose[0, 8] = -0.04
 
-        elif optimization_index == 3: # ori 18, Shoe
+        elif optimization_index == 18: # ori 18, Shoe
             self._opt.index_cloth = 4
             self._opt.clusters = 'clusters_shoes.npy'
             self._opt.num_clusters = 100

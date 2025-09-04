@@ -31,14 +31,17 @@ VIEWS = ['0004', '0028', '0052', '0076']  # left, back, right, front
 
 def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_view = '0076'):
     process_folders = []
-    for subject_id in os.listdir(root_folder):
+    for subject_id in sorted(os.listdir(root_folder)):
         subject_dir = os.path.join(root_folder, subject_id)
         for outfit in subject_outfit:
             outfit_dir = os.path.join(subject_dir, outfit)
-            take_dir_list = sorted(os.listdir(outfit_dir))
-            for take_id in take_dir_list:
-                take_dir = os.path.join(outfit_dir, take_id)
-                process_folders.append(take_dir)
+            if os.path.exist(outfit_dir):
+                take_dir_list = sorted(os.listdir(outfit_dir))
+                for take_id in take_dir_list:
+                    take_dir = os.path.join(outfit_dir, take_id)
+                    process_folders.append(take_dir)
+            else:
+                continue
 
     res = []
     for process_folder in process_folders:

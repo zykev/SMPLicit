@@ -19,6 +19,17 @@ from dress4d_utils import extract_files, compute_udf_from_mesh, get_depth_map, s
 import sys
 import os
 
+# 获取当前脚本所在目录
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 将 submodule 的路径加入 Python 搜索路径
+HP_PATH = os.path.join(ROOT_DIR, "submodules", "human_parsing")
+sys.path.insert(0, HP_PATH)  # 插入到开头，优先搜索
+
+from submodules.human_parsing.evaluate_simple import get_segmentation_map
+
+
+
 # # 获取当前文件夹的上级目录
 # current_dir = os.path.dirname(os.path.abspath(__file__))
 # project_root = os.path.dirname(current_dir)
@@ -52,8 +63,10 @@ print("PROCESSING:")
 
 folders = extract_files(_opt.root_folder, select_view = _opt.camera_view)
 # folders = [folders[10]]
+segmentation_maps = get_segmentation_map(folders)
 
-for folder in folders:
+
+for idx, folder in enumerate(folders):
     print('Processing folder:', folder['process_folder'])
     # set save folder
     subject_id = folder['process_folder'].split('/')[2]
@@ -61,11 +74,28 @@ for folder in folders:
     take_id = folder['process_folder'].split('/')[4]
     save_folder = os.path.join(_opt.save_folder, subject_id, outfit, take_id, 'Meshes_cloth')
 
+    segmentation = segmentation_maps[idx]
+    segmentation = segmentation.cpu().numpy()
+
+    # 清理分割图中的小噪声块
+    if (segmentation == 2).sum() < 100:
+        segmentation[segmentation == 2] = 25
+    if (segmentation == 5).sum() < 50:
+        segmentation[segmentation == 5] = 25
+    if (segmentation == 7).sum() < 50:
+        segmentation[segmentation == 7] = 25
+    if (segmentation == 9).sum() < 50:
+        segmentation[segmentation == 9] = 25
+    if (segmentation == 12).sum() < 50:
+        segmentation[segmentation == 12] = 25
+    if (segmentation == 18).sum() < 50:
+        segmentation[segmentation == 18] = 25
+
     # --- 2. 主循环：遍历每个foloder的每张图片进行处理 ---
     for path_image, path_smpl in zip(folder['path_image'], folder['path_smpl']):
         identity_id = path_image.split('/')[-1].split('-')[-1].replace('.png', '')
         # path_camera = _opt.camera_folder
-        path_segmentation = path_image.replace('images', 'labels').replace('capture', 'label')
+        # path_segmentation = path_image.replace('images', 'labels').replace('capture', 'label')
         path_instance_segmentation = path_image.replace('images', 'masks').replace('capture', 'mask')
 
         # 读取图片和SMPL
@@ -74,31 +104,18 @@ for folder in folders:
 
         posed_meshes = []
         unposed_meshes = []
-        cloth_latents = []
+        cloth_latents = {}
         # posed_normals = []
         # colors = []
 
         
         # --- 3. 内层循环：遍历图片中的每一个人 ---
-        segmentation = cv2.imread(path_segmentation) # (h, w, 3)
-        segmentation = cv2.cvtColor(segmentation, cv2.COLOR_BGR2RGB)  # 转成 RGB
-        segmentation = seg_to_label(segmentation)
+        # segmentation = cv2.imread(path_segmentation) # (h, w, 3)
+        # segmentation = cv2.cvtColor(segmentation, cv2.COLOR_BGR2RGB)  # 转成 RGB
+        # segmentation = seg_to_label(segmentation)
 
         instance_segmentation = cv2.imread(path_instance_segmentation, 0) # (h, w) 0,1,2,
 
-        # # 清理分割图中的小噪声块
-        # if (segmentation == 2).sum() < 100:
-        #     segmentation[segmentation == 2] = 25
-        # if (segmentation == 5).sum() < 50:
-        #     segmentation[segmentation == 5] = 25
-        # if (segmentation == 7).sum() < 50:
-        #     segmentation[segmentation == 7] = 25
-        # if (segmentation == 9).sum() < 50:
-        #     segmentation[segmentation == 9] = 25
-        # if (segmentation == 12).sum() < 50:
-        #     segmentation[segmentation == 12] = 25
-        # if (segmentation == 18).sum() < 50:
-        #     segmentation[segmentation == 18] = 25
 
         # Image crop params:
         global_orient = torch.from_numpy(smpl_prediction['global_orient']) # (3,)
@@ -179,8 +196,7 @@ for folder in folders:
 
             # Re-Pose to SMPL's Image pose:
             # --- 4.2. 将采样点从 T-pose 变换到目标姿态 (蒙皮/Skinning) ---
-            # if cloth_optimization_index == 9 or cloth_optimization_index == 12:
-            if cloth_optimization_index == 5:
+            if cloth_optimization_index == 9 or cloth_optimization_index == 12:
                 # lower body
                 unposed_verts = coords_tensor
                 model_trimesh = trimesh.Trimesh(unposed_verts, [], process=False)
@@ -263,7 +279,7 @@ for folder in folders:
             # NOTE: Initialize upper cloth to open jacket's parameters helps convergence when we have detected jacket's segmentation label
             # --- 4.5. 初始化并执行优化循环 ---
             # 为当前衣物初始化可优化的参数（形状和风格的潜向量）
-            if cloth_optimization_index == 6: #7, Coat
+            if cloth_optimization_index == 7: #7, Coat
                 parameters = image_fitting.OptimizationCloth(_opt.num_params_style, _opt.num_params_shape, cool_latent_reps[3][6:])
             else:
                 parameters = image_fitting.OptimizationCloth(_opt.num_params_style, _opt.num_params_shape)
@@ -279,7 +295,7 @@ for folder in folders:
 
             # 加载聚类文件，用于位置编码
             clusters = np.load(SMPLicit_Layer._opt.path_cluster_files + '/' + _opt.clusters, allow_pickle=True)
-            for i in tqdm.tqdm(range(_opt.iterations)):
+            for i in tqdm.tqdm(range(_opt.iterations), desc=f"cloth {_opt.labels_name[int(cloth_optimization_index)]}"):
                 # Select random number of vertices:
                 indices = np.arange(len(array_pixels))
                 np.random.shuffle(indices)
@@ -303,7 +319,7 @@ for folder in folders:
 
                     # Forward pass:
                     # 前向传播：将位置编码和潜向量输入SMPLicit模型，预测SDF值
-                    if cloth_optimization_index == 3:   #18: # Shoe
+                    if cloth_optimization_index == 18:   #18: # Shoe
                         empty_tensor = torch.zeros(1,0).cuda()
                         pred_dists = SMPLicit_Layer.forward(_opt.index_cloth, empty_tensor, style, input_position_points)
                     else:
@@ -321,9 +337,9 @@ for folder in folders:
 
                 # Hyperparameters for fitting T-Shirt and Jacket better. This might require a little bit of tweaking, and challenging images might converge wrongly
                 # 添加正则化损失，防止潜向量过大导致形状怪异
-                if cloth_optimization_index == 4: # uppercloth
+                if cloth_optimization_index == 5: # uppercloth
                     reg = torch.abs(style).mean()*10 + torch.abs(shape).mean()
-                elif cloth_optimization_index == 6: # coat
+                elif cloth_optimization_index == 7: # coat
                     center_z_style = torch.FloatTensor(cool_latent_reps[3][6:]).cuda()
                     center_z_cut = torch.FloatTensor(cool_latent_reps[3][:6]).cuda()
                     reg = (torch.abs(style - center_z_style).mean() + torch.abs(shape - center_z_cut).mean())*4
@@ -345,12 +361,12 @@ for folder in folders:
             # --- 4.6. 从优化后的隐式场重建显式网格 ---
             style, shape = parameters.forward()
 
-            if cloth_optimization_index == 3: # Shoe
+            if cloth_optimization_index == 18: # Shoe
                 smpl_mesh, model_trimesh = SMPLicit_Layer.reconstruct([_opt.index_cloth], [style[0]], _opt.pose_inference_repose.cuda(), beta.cuda())
-                cloth_latents.append(style[0].cpu().data.numpy())
+                cloth_latents.update({_opt.labels_name[int(cloth_optimization_index)]: style[0].cpu().data.numpy()})
             else:
                 smpl_mesh, model_trimesh = SMPLicit_Layer.reconstruct([_opt.index_cloth], [torch.cat((shape, style), 1).cpu().data.numpy()[0]], _opt.pose_inference_repose.cuda(), beta.cuda())
-                cloth_latents.append(torch.cat((shape, style), 1)[0].cpu().data.numpy())
+                cloth_latents.update({_opt.labels_name[int(cloth_optimization_index)]: torch.cat((shape, style), 1)[0].cpu().data.numpy()})
 
             # smooth_normals = model_trimesh.vertex_normals.copy()
             # normals = model_trimesh.vertex_normals.copy()
@@ -361,8 +377,7 @@ for folder in folders:
 
             # Unpose+Pose if it's lower body, and pose directly if it's upper body:
             # 将 T-pose 下的衣物网格，通过蒙皮算法穿到目标姿态上
-            if cloth_optimization_index == 5:
-            # if cloth_optimization_index == 9 or cloth_optimization_index == 12:
+            if cloth_optimization_index == 9 or cloth_optimization_index == 12:
                 posed_trimesh = image_fitting.unpose_and_deform_cloth_w_normals(model_trimesh, _opt.pose_inference_repose.cpu(), pose, beta.cpu(), J, v, SMPL_Layer, transl=transl, return_unpose=True)
             else:
                 posed_trimesh = image_fitting.batch_posing_w_normals(model_trimesh, pose, J, v, SMPL_Layer, transl=transl)
@@ -387,7 +402,7 @@ for folder in folders:
 
         combined_unposed.export(os.path.join(save_folder, 'unposed-' + identity_id + '.obj'))
         combined_posed.export(os.path.join(save_folder, 'posed-' + identity_id + '.obj'))
-        np.savez(os.path.join(save_folder, 'latents-' + identity_id + '.npz'), *cloth_latents)
+        np.savez(os.path.join(save_folder, 'latents-' + identity_id + '.npz'), **cloth_latents)
 
         # render posed meshes to images
         posed_image = get_mesh_render(combined_posed, K, R, T, image_size=image_size)
