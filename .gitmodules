@@ -1,0 +1,3 @@
+[submodule "submodules/human_parsing"]
+	path = submodules/human_parsing
+	url = https://github.com/zykev/Self-Correction-Human-Parsing.git
