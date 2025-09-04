@@ -6,11 +6,11 @@ from PIL import Image
 import cv2
 import matplotlib.pyplot as plt
 import trimesh
-import kaolin
+# import kaolin
 import glob
 
 
-from pytorch3d.structures import Meshes
+from pytorch3d.structures import Meshes, Pointclouds
 from pytorch3d.renderer import (
     PerspectiveCameras, 
     RasterizationSettings, 
@@ -21,6 +21,7 @@ from pytorch3d.renderer import (
 )
 from pytorch3d.renderer.mesh import TexturesVertex
 from pytorch3d.utils import cameras_from_opencv_projection
+from pytorch3d.loss.point_mesh_distance import _PointFaceDistance
 
 
 SURFACE_LABEL = ['skin', 'hair', 'shoe', 'upper', 'lower', 'outer']
@@ -35,7 +36,7 @@ def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_view =
         subject_dir = os.path.join(root_folder, subject_id)
         for outfit in subject_outfit:
             outfit_dir = os.path.join(subject_dir, outfit)
-            if os.path.exist(outfit_dir):
+            if os.path.exists(outfit_dir):
                 take_dir_list = sorted(os.listdir(outfit_dir))
                 for take_id in take_dir_list:
                     take_dir = os.path.join(outfit_dir, take_id)
@@ -445,55 +446,87 @@ def get_multi_mesh_render(mesh_list, K, R, T, image_size):
     return images.squeeze(0)[..., :3].cpu().numpy()
 
 
-def compute_udf_from_mesh(mesh: kaolin.rep.SurfaceMesh, points: torch.Tensor) -> torch.Tensor:
+# def compute_udf_from_mesh(mesh: kaolin.rep.SurfaceMesh, points: torch.Tensor) -> torch.Tensor:
+#     """
+#     根据 GitHub issue 中的官方推荐方法，实现从 Kaolin SurfaceMesh 计算 SDF 的函数。
+
+#     该函数通过组合 `point_to_mesh_distance` 和 `check_sign` 来计算符号距离。
+
+#     参数:
+#         mesh (kaolin.rep.SurfaceMesh): 输入的网格对象。
+#                                     为了保证符号计算准确，该网格必须是水密的 (watertight)。
+#         points (torch.Tensor):     需要计算 SDF 的点云，形状为 (N, 3)。
+
+#     返回:
+#         torch.Tensor: 一个形状为 (N,) 的张量，包含每个点的 SDF 值。
+#                       负值代表点在网格内部，正值代表在外部。
+#     """
+#     # 确保网格的顶点和面片与点云在同一个设备上 (例如 'cuda')
+#     # Kaolin 的函数通常需要一个批处理维度，所以我们使用 unsqueeze(0)
+#     vertices_batch = mesh.vertices[0].to(points.device).unsqueeze(0).contiguous()
+#     faces = mesh.faces[0].to(points.device, dtype=torch.int64).contiguous()
+#     points_batch = points.to(vertices_batch.device).unsqueeze(0).contiguous()
+
+#     # 1. 提取出每个三角面片的顶点坐标
+#     # 这个是 point_to_mesh_distance 和 check_sign 都需要的输入
+#     face_vertices = kaolin.ops.mesh.index_vertices_by_faces(vertices_batch, faces)
+
+#     # 2. 计算点到网格表面的无符号距离（的平方）
+#     # 遵循图中建议，这是第一步
+#     distance_sq, face_indices, _ = kaolin.metrics.trianglemesh.point_to_mesh_distance(
+#         points_batch, face_vertices
+#     )
+    
+#     # 3. 对距离的平方进行开方，得到真实的距离
+#     # 遵循图中 "be careful to apply torch.sqrt" 的建议
+#     distance = torch.sqrt(distance_sq)
+
+#     # 4. 判断点的符号（内外）
+#     # 遵循图中建议，这是第二步
+#     # 注意：check_sign 要求网格是水密的 (watertight)
+#     # is_inside = kaolin.ops.mesh.check_sign(vertices_batch, faces, points_batch)
+    
+#     # 5. 结合距离和符号
+#     # 将布尔值的 is_inside (True for inside) 转换为数值符号 (-1 for inside, 1 for outside)
+#     # sign = torch.where(is_inside, -1.0, 1.0).to(distance.device)
+    
+#     # signed_distance = sign * distance
+    
+#     # 返回结果时去掉批处理维度，使其与输入点的维度匹配
+#     return distance.squeeze(0)
+
+def point_to_mesh_distance(verts, faces, query_points, min_triangle_area=1e-4):
     """
-    根据 GitHub issue 中的官方推荐方法，实现从 Kaolin SurfaceMesh 计算 SDF 的函数。
-
-    该函数通过组合 `point_to_mesh_distance` 和 `check_sign` 来计算符号距离。
-
-    参数:
-        mesh (kaolin.rep.SurfaceMesh): 输入的网格对象。
-                                    为了保证符号计算准确，该网格必须是水密的 (watertight)。
-        points (torch.Tensor):     需要计算 SDF 的点云，形状为 (N, 3)。
-
-    返回:
-        torch.Tensor: 一个形状为 (N,) 的张量，包含每个点的 SDF 值。
-                      负值代表点在网格内部，正值代表在外部。
+    Return squared distance from each point in pcls to its closest face in meshes.
+    - meshes: Meshes, batch size N
+    - pcls: Pointclouds, same batch size N
     """
-    # 确保网格的顶点和面片与点云在同一个设备上 (例如 'cuda')
-    # Kaolin 的函数通常需要一个批处理维度，所以我们使用 unsqueeze(0)
-    vertices_batch = mesh.vertices[0].to(points.device).unsqueeze(0).contiguous()
-    faces = mesh.faces[0].to(points.device, dtype=torch.int64).contiguous()
-    points_batch = points.to(vertices_batch.device).unsqueeze(0).contiguous()
+    meshes = Meshes(verts=[verts], faces=[faces])
+    pcls = Pointclouds(points=[query_points])
 
-    # 1. 提取出每个三角面片的顶点坐标
-    # 这个是 point_to_mesh_distance 和 check_sign 都需要的输入
-    face_vertices = kaolin.ops.mesh.index_vertices_by_faces(vertices_batch, faces)
+    # if len(meshes) != len(pcls):
+    #     raise ValueError("meshes and pointclouds must be equal sized batches")
+    
+    # Packed pointclouds
+    points = pcls.points_packed()  # (P, 3)
+    points_first_idx = pcls.cloud_to_packed_first_idx()
+    max_points = pcls.num_points_per_cloud().max().item()
 
-    # 2. 计算点到网格表面的无符号距离（的平方）
-    # 遵循图中建议，这是第一步
-    distance_sq, face_indices, _ = kaolin.metrics.trianglemesh.point_to_mesh_distance(
-        points_batch, face_vertices
+    # Packed faces
+    verts_packed = meshes.verts_packed()
+    faces_packed = meshes.faces_packed()
+    tris = verts_packed[faces_packed]  # (T, 3, 3)
+    tris_first_idx = meshes.mesh_to_faces_packed_first_idx()
+    # max_tris = meshes.num_faces_per_mesh().max().item()
+
+    point_face_distance = _PointFaceDistance.apply
+    # Compute squared distances (P,)
+    point_to_face = point_face_distance(
+        points, points_first_idx,
+        tris, tris_first_idx,
+        max_points, min_triangle_area
     )
-    
-    # 3. 对距离的平方进行开方，得到真实的距离
-    # 遵循图中 "be careful to apply torch.sqrt" 的建议
-    distance = torch.sqrt(distance_sq)
-
-    # 4. 判断点的符号（内外）
-    # 遵循图中建议，这是第二步
-    # 注意：check_sign 要求网格是水密的 (watertight)
-    # is_inside = kaolin.ops.mesh.check_sign(vertices_batch, faces, points_batch)
-    
-    # 5. 结合距离和符号
-    # 将布尔值的 is_inside (True for inside) 转换为数值符号 (-1 for inside, 1 for outside)
-    # sign = torch.where(is_inside, -1.0, 1.0).to(distance.device)
-    
-    # signed_distance = sign * distance
-    
-    # 返回结果时去掉批处理维度，使其与输入点的维度匹配
-    return distance.squeeze(0)
-
+    return torch.sqrt(point_to_face + 1e-6)  # squared distances (P,)
 
 def combine_meshes(meshes):
     """

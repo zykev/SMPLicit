@@ -9,12 +9,12 @@ import trimesh
 from fit_SMPLicit.utils.sdf import create_grid, eval_grid_octree, eval_grid
 from fit_SMPLicit.utils import projection
 from fit_SMPLicit.options.image_fitting_options import FitOptions
-import kaolin
+# import kaolin
 import time
 import tqdm
 from fit_SMPLicit.utils import image_fitting
 
-from dress4d_utils import extract_files, compute_udf_from_mesh, get_depth_map, seg_to_label, compute_projections, get_multi_mesh_render, get_mesh_render, combine_meshes, get_02v_pose
+from dress4d_utils import extract_files, compute_udf_from_mesh, get_depth_map, seg_to_label, compute_projections, get_multi_mesh_render, get_mesh_render, combine_meshes, get_02v_pose, point_to_mesh_distance
 
 import sys
 import os
@@ -172,7 +172,7 @@ for idx, folder in enumerate(folders):
             else:
                 v_inference = v
             # 将 SMPL 网格转换为 Kaolin 格式，以计算 SDF
-            smpl_mesh = kaolin.rep.SurfaceMesh(vertices = [v_inference[0].cuda()], faces=[smpl_faces.cuda()])
+            # smpl_mesh = kaolin.rep.SurfaceMesh(vertices = [v_inference[0].cuda()], faces=[smpl_faces.cuda()])
             
 
             # Sample points uniformly in predefined 3D space of clothing:
@@ -184,7 +184,8 @@ for idx, folder in enumerate(folders):
 
             # Remove unnecessary points that are too far from body and are never occupied anyway:
             # 过滤掉离身体表面太远的采样点，以提高效率
-            unsigned_distance = compute_udf_from_mesh(smpl_mesh, coords_tensor.cuda())
+            unsigned_distance = point_to_mesh_distance(v_inference[0].cuda(), smpl_faces.cuda(), coords_tensor.cuda())
+            # unsigned_distance = compute_udf_from_mesh(smpl_mesh, coords_tensor.cuda())
 
             if cloth_optimization_index == 2:
                 valid = unsigned_distance < 0.1
