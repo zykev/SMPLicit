@@ -23,6 +23,8 @@ from pytorch3d.renderer.mesh import TexturesVertex
 from pytorch3d.utils import cameras_from_opencv_projection
 from pytorch3d.loss.point_mesh_distance import _PointFaceDistance
 
+from dress4d_info import VIEW_MAP
+
 
 SURFACE_LABEL = ['skin', 'hair', 'shoe', 'upper', 'lower', 'outer']
 SURFACE_LABEL_COLOR = np.array([[128, 128, 128], [255, 128, 0], [128, 0, 255], [180, 50, 50], [50, 180, 50], [0, 128, 255]])
@@ -30,7 +32,7 @@ VIEWS = ['0004', '0028', '0052', '0076']  # left, back, right, front
 # grey, orange, purple, red, green, blue
 
 
-def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_view = '0076'):
+def extract_files(root_folder, subject_outfit= ['Inner', 'Outer']):
     process_folders = []
     for subject_id in sorted(os.listdir(root_folder)):
         subject_dir = os.path.join(root_folder, subject_id)
@@ -46,8 +48,10 @@ def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_view =
 
     res = []
     for process_folder in process_folders:
+        subject_id = process_folder.split('/')[2]
         # process folder is one task for one outfit in one subject
         # print('Processing folder: ', process_folder)
+        select_view = VIEW_MAP[subject_id]
         path_camera = os.path.join(process_folder, 'Capture/cameras.pkl')
         path_image = os.path.join(process_folder, 'Capture/', select_view, 'images')
         path_smpl_prediction = os.path.join(process_folder, 'SMPL')

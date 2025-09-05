@@ -14,7 +14,7 @@ import time
 import tqdm
 from fit_SMPLicit.utils import image_fitting
 
-from dress4d_utils import extract_files, compute_udf_from_mesh, get_depth_map, seg_to_label, compute_projections, get_multi_mesh_render, get_mesh_render, combine_meshes, get_02v_pose, point_to_mesh_distance
+from dress4d_utils import extract_files, get_depth_map, compute_projections, get_mesh_render, combine_meshes, get_02v_pose, point_to_mesh_distance
 
 import sys
 import os
@@ -61,9 +61,11 @@ cool_latent_reps = np.load('fit_SMPLicit/utils/z_gaussians.npy')
 print("PROCESSING:")
 # print(files)
 
-folders = extract_files(_opt.root_folder, select_view = _opt.camera_view)
+folders = extract_files(_opt.root_folder)
 # folders = [folders[10]]
 segmentation_maps = get_segmentation_map(folders)
+
+assert len(folders) == len(segmentation_maps)
 
 
 for idx, folder in enumerate(folders):
@@ -73,6 +75,8 @@ for idx, folder in enumerate(folders):
     outfit = folder['process_folder'].split('/')[3]
     take_id = folder['process_folder'].split('/')[4]
     save_folder = os.path.join(_opt.save_folder, subject_id, outfit, take_id, 'Meshes_cloth')
+    os.makedirs(save_folder, exist_ok=True)
+    # print(save_folder)
 
     segmentation = segmentation_maps[idx]
     segmentation = segmentation.cpu().numpy()
@@ -92,7 +96,7 @@ for idx, folder in enumerate(folders):
         segmentation[segmentation == 18] = 25
 
     # --- 2. 主循环：遍历每个foloder的每张图片进行处理 ---
-    for path_image, path_smpl in zip(folder['path_image'], folder['path_smpl']):
+    for path_image, path_smpl, select_view in zip(folder['path_image'], folder['path_smpl'], folder['camera_view']):
         identity_id = path_image.split('/')[-1].split('-')[-1].replace('.png', '')
         # path_camera = _opt.camera_folder
         # path_segmentation = path_image.replace('images', 'labels').replace('capture', 'label')
@@ -401,12 +405,12 @@ for idx, folder in enumerate(folders):
         combined_unposed = combine_meshes(unposed_meshes)
         combined_posed = combine_meshes(posed_meshes)
 
-        combined_unposed.export(os.path.join(save_folder, 'unposed-' + identity_id + '.obj'))
-        combined_posed.export(os.path.join(save_folder, 'posed-' + identity_id + '.obj'))
-        np.savez(os.path.join(save_folder, 'latents-' + identity_id + '.npz'), **cloth_latents)
+        combined_unposed.export(os.path.join(save_folder, 'unposed-' + identity_id + '-' + select_view + '.obj'))
+        combined_posed.export(os.path.join(save_folder, 'posed-' + identity_id + '-' + select_view + '.obj'))
+        np.savez(os.path.join(save_folder, 'latents-' + identity_id + '-' + select_view + '.npz'), **cloth_latents)
 
         # render posed meshes to images
         posed_image = get_mesh_render(combined_posed, K, R, T, image_size=image_size)
         # unposed_image = get_multi_mesh_render(unposed_meshes, K, R, T, image_size=image_size)
-        plt.imsave(os.path.join(save_folder, 'render-' + identity_id + '.png'), posed_image)
+        plt.imsave(os.path.join(save_folder, 'render-' + identity_id + '-' + select_view + '.png'), posed_image)
 

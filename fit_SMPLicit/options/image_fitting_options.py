@@ -71,7 +71,7 @@ class FitOptions():
 
         self._parser.add_argument('--root_folder', type=str, default='.datasets/4ddress/', help='folder with input images')
         self._parser.add_argument('--camera_view', type=str, default='0076', help='camera view to use (0004, 0028, 0052, 0076)')
-        self._parser.add_argument('--save_folder', type=str, default='.datasets/4ddress/', help='folder to save unposed meshes')
+        self._parser.add_argument('--save_folder', type=str, default='/disk1/work/zychen/Datasets/4ddress/', help='folder to save unposed meshes')
         self._parser.add_argument('--image_folder', type=str, default='4ddress_sample/images/', help='folder with input images')
         self._parser.add_argument('--smpl_prediction_folder', type=str, default='4ddress_sample/smpl_prediction/', help='folder with input images')
         self._parser.add_argument('--cloth_segmentation_folder', type=str, default='4ddress_sample/cloth_segmentation/', help='folder with input images')
