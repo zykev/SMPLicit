@@ -30,13 +30,6 @@ from submodules.human_parsing.evaluate_simple import get_segmentation_map
 
 
 
-# # 获取当前文件夹的上级目录
-# current_dir = os.path.dirname(os.path.abspath(__file__))
-# project_root = os.path.dirname(current_dir)
-
-# # 将平行目录加入 Python 搜索路径
-# sys.path.append(os.path.join(project_root, "SMPLicit"))
-
 import SMPLicit
 import os
 # cuda = 2
@@ -53,8 +46,6 @@ SMPL_Layer = SMPLicit_Layer.SMPL_Layer
 smpl_faces = torch.LongTensor(SMPL_Layer.faces).cuda()
 v_pose = get_02v_pose()
 
-# files = glob.glob(_opt.image_folder + '/*' + _opt.image_extension)
-# files.sort()
 
 cool_latent_reps = np.load('fit_SMPLicit/utils/z_gaussians.npy')
 
@@ -86,6 +77,8 @@ for idx, folder in enumerate(folders):
         segmentation[segmentation == 2] = 25
     if (segmentation == 5).sum() < 50:
         segmentation[segmentation == 5] = 25
+    if (segmentation == 6).sum() < 50:
+        segmentation[segmentation == 6] = 25
     if (segmentation == 7).sum() < 50:
         segmentation[segmentation == 7] = 25
     if (segmentation == 9).sum() < 50:
@@ -94,6 +87,14 @@ for idx, folder in enumerate(folders):
         segmentation[segmentation == 12] = 25
     if (segmentation == 18).sum() < 50:
         segmentation[segmentation == 18] = 25
+
+    # 更新配置中的分割图信息
+    _opt = fitoptions.set_segmentation(segmentation)
+    if len(_opt.labels) == 0:
+        print(f"Labels empty for folder: {folder['process_folder']}")
+        # 以追加方式写入 txt
+        with open('tmp/problem_folder.txt', 'a') as f:
+            f.write(folder['process_folder'] + '\n')
 
     # --- 2. 主循环：遍历每个foloder的每张图片进行处理 ---
     for path_image, path_smpl, select_view in zip(folder['path_image'], folder['path_smpl'], folder['camera_view']):
@@ -129,8 +130,8 @@ for idx, folder in enumerate(folders):
         transl = torch.from_numpy(smpl_prediction['transl']).unsqueeze(0) # (1, 3)
 
 
-        # 更新配置中的分割图信息
-        _opt = fitoptions.set_segmentation(segmentation)
+        
+
 
         # 生成基础 SMPL 身体和深度图
         SMPL_Layer = SMPL_Layer.cuda()
@@ -175,8 +176,6 @@ for idx, folder in enumerate(folders):
                 v_inference = SMPL_Layer.forward(beta=beta.cuda(), theta=_opt.pose_inference_repose.cuda(), get_skin=True)[0]
             else:
                 v_inference = v
-            # 将 SMPL 网格转换为 Kaolin 格式，以计算 SDF
-            # smpl_mesh = kaolin.rep.SurfaceMesh(vertices = [v_inference[0].cuda()], faces=[smpl_faces.cuda()])
             
 
             # Sample points uniformly in predefined 3D space of clothing:
@@ -189,7 +188,6 @@ for idx, folder in enumerate(folders):
             # Remove unnecessary points that are too far from body and are never occupied anyway:
             # 过滤掉离身体表面太远的采样点，以提高效率
             unsigned_distance = point_to_mesh_distance(v_inference[0].cuda(), smpl_faces.cuda(), coords_tensor.cuda())
-            # unsigned_distance = compute_udf_from_mesh(smpl_mesh, coords_tensor.cuda())
 
             if cloth_optimization_index == 2:
                 valid = unsigned_distance < 0.1
@@ -201,7 +199,7 @@ for idx, folder in enumerate(folders):
 
             # Re-Pose to SMPL's Image pose:
             # --- 4.2. 将采样点从 T-pose 变换到目标姿态 (蒙皮/Skinning) ---
-            if cloth_optimization_index == 9 or cloth_optimization_index == 12:
+            if cloth_optimization_index in [6, 9, 12]:
                 # lower body
                 unposed_verts = coords_tensor
                 model_trimesh = trimesh.Trimesh(unposed_verts, [], process=False)
@@ -382,7 +380,7 @@ for idx, folder in enumerate(folders):
 
             # Unpose+Pose if it's lower body, and pose directly if it's upper body:
             # 将 T-pose 下的衣物网格，通过蒙皮算法穿到目标姿态上
-            if cloth_optimization_index == 9 or cloth_optimization_index == 12:
+            if cloth_optimization_index in [6, 9, 12]:
                 posed_trimesh = image_fitting.unpose_and_deform_cloth_w_normals(model_trimesh, _opt.pose_inference_repose.cpu(), pose, beta.cpu(), J, v, SMPL_Layer, transl=transl, return_unpose=True)
             else:
                 posed_trimesh = image_fitting.batch_posing_w_normals(model_trimesh, pose, J, v, SMPL_Layer, transl=transl)
