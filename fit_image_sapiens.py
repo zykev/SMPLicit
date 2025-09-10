@@ -77,8 +77,7 @@ for idx, folder in enumerate(folders):
     save_folder = os.path.join(_opt.save_folder, subject_id, outfit, take_id, 'Meshes_cloth')
     if os.path.exists(save_folder):
         shutil.rmtree(save_folder)
-    else:
-        os.makedirs(save_folder, exist_ok=True)
+    os.makedirs(save_folder, exist_ok=True)  
     # print(save_folder)
 
     segmentation = segmentation_maps[idx]
