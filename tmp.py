@@ -195,3 +195,22 @@ ORIGINAL_GOLIATH_PALETTE[16]
 # %%
 ORIGINAL_GOLIATH_PALETTE[27]
 # %%
+def visual_seg(segmentation):
+    color_array = np.array([[255, 255, 255], [128, 128, 128], [255, 128, 0]], dtype=np.uint8)
+    label_map_visual = color_array[segmentation]
+
+    return label_map_visual
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+a = np.load('tmp/cloth_mask.npy')
+label_map_visual = visual_seg(a)
+import matplotlib.pyplot as plt
+plt.figure(figsize=(6,6))
+plt.imshow(label_map_visual)
+plt.axis('off')
+plt.title('Segmentation Map with Left/Right Shoes')
+plt.show()
+# %%

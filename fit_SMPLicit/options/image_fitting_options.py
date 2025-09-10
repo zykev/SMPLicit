@@ -41,9 +41,9 @@ class FitOptions():
         self.segmentation = segmentation
 
         labels = np.unique(self.segmentation)
-        labels = np.intersect1d(labels, [5, 6, 7, 9, 12])
+        labels = np.intersect1d(labels, [5, 7, 9, 12])
         self._opt.labels = labels
-        self._opt.labels_name = {5: 'upper', 6: 'dress', 7: 'outer', 9: 'pants', 12: 'skirts'}
+        self._opt.labels_name = {5: 'upper', 7: 'outer', 9: 'pants', 12: 'skirts'}
         return self._opt
     
     # def set_segmentation(self, segmentation):
@@ -56,7 +56,8 @@ class FitOptions():
     
     def set_labels(self):
 
-        self._opt.labels = [4, 5, 6]
+        self._opt.labels = [5, 7, 9, 12]
+        self._opt.labels_name = {5: 'upper', 7: 'outer', 9: 'pants', 12: 'skirts'}
 
         return self._opt
 
@@ -165,7 +166,7 @@ class FitOptions():
             self._opt.pose_inference_repose[0, 5] = 0.04
             self._opt.pose_inference_repose[0, 8] = -0.04
 
-        elif optimization_index in [6, 12]: # Skirts
+        elif optimization_index == 12: # Skirts
             self._opt.index_cloth = 2
             self._opt.clusters = 'clusters_lowerbody.npy'
             self._opt.num_clusters = 500

@@ -73,7 +73,7 @@ def extract_files(root_folder, subject_outfit= ['Inner', 'Outer']):
 
         res.append({
             'process_folder': process_folder,
-            'camera_view': select_view,
+            'camera_view': [select_view],
             'camera_params': (K, R, T),
             'path_image': img_files,
             'path_smpl': smpl_files,
@@ -590,3 +590,72 @@ def get_02v_pose(num_joints=24):
     smpl_pose[0, 2*3:2*3+3] = aa45n
 
     return smpl_pose
+
+
+def adjust_segmentation_map(seg1, seg2):
+    seg1 = seg1.clone()
+
+    B, H, W = seg1.shape
+
+    for b in range(B):
+        s1 = seg1[b]
+        s2 = seg2[b]
+
+        for cls, thresh in [(2,100), (5,50), (6,50), (7,50), (9,50), (12,50), (18,50)]:
+            if (s1 == cls).sum() < thresh:
+                s1[s1 == cls] = 25
+
+         # 2. dress=6 → 拆成 upper=5 和 skirts=12
+        if (s1 == 6).any():
+            mask_dress = (s1 == 6)
+
+            mask_upper = mask_dress & (s2 == 2)   # dress ∩ upper cloth
+            mask_skirt = mask_dress & (s2 == 1)   # dress ∩ lower cloth
+
+            s1[mask_upper] = 5
+            s1[mask_skirt] = 12
+            s1[s1 == 6] = 25
+            
+        # 1. outer=7 存在 → upper=5 改成 25
+        if (s1 == 7).any() and (s1 == 5).any():
+            cnt_outer = (s1 == 7).sum().item()
+            cnt_upper = (s1 == 5).sum().item()
+            if cnt_outer >= cnt_upper:
+                # 保留 outer=7，把 upper=5 改成25
+                s1[(s1 == 5)] = 25
+            else:
+                # 保留 upper=5，把 outer=7 合并为 upper
+                s1[s1 == 7] = 5
+        # 4. 没有 outer=7，但有 upper=5
+        if (s1 == 5).any() and not (s1 == 7).any():
+            s1[(s1 == 5) & (s2 != 2)] = 25
+            s1[(s1 == 5) | (s2 == 2)] = 5
+        
+        if (s1 == 7).any() and not (s1 == 5).any():
+            s1[(s1 == 7) & (s2 != 2)] = 25
+            # s1[(s1 == 7) | (s2 == 2)] = 7
+        
+        # 3. pants=9 与 skirts=12 同时出现 → 按面积选择大类
+        if (s1 == 9).any() and (s1 == 12).any():
+            cnt_pants = (s1 == 9).sum().item()
+            cnt_skirt = (s1 == 12).sum().item()
+
+            if cnt_pants >= cnt_skirt:
+                # 保留 pants=9，把 skirt=12 合并为 pants
+                s1[s1 == 12] = 9
+            else:
+                # 保留 skirts=12，把 pants=9 合并为 skirts
+                s1[s1 == 9] = 12
+        if (s1 == 12).any() and not (s1 == 9).any():
+            # 5. 没有 pants=9，但有 skirts=12
+            s1[(s1 == 12) & (s2 != 1)] = 25
+            s1[(s1 == 12) | (s2 == 1)] = 12
+        
+        if (s1 == 9).any() and not (s1 == 12).any():
+            # 6. 没有 skirts=12，但有 pants=9
+            s1[(s1 == 9) & (s2 != 1)] = 25
+            s1[(s1 == 9) | (s2 == 1)] = 9
+
+        seg1[b] = s1
+
+    return seg1

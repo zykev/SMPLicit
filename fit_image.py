@@ -26,7 +26,8 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 HP_PATH = os.path.join(ROOT_DIR, "submodules", "human_parsing")
 sys.path.insert(0, HP_PATH)  # 插入到开头，优先搜索
 
-from submodules.human_parsing.evaluate_simple import get_segmentation_map
+# from submodules.human_parsing.evaluate_simple import get_segmentation_map
+from submodules.human_parsing.sapiens_seg import get_segmentation_sapiens
 
 
 
@@ -53,8 +54,9 @@ print("PROCESSING:")
 # print(files)
 
 folders = extract_files(_opt.root_folder)
-# folders = [folders[10]]
-segmentation_maps = get_segmentation_map(folders)
+folders = [folders[0]]
+
+segmentation_maps = get_segmentation_sapiens(folders)
 
 assert len(folders) == len(segmentation_maps)
 
@@ -95,6 +97,7 @@ for idx, folder in enumerate(folders):
         # 以追加方式写入 txt
         with open('tmp/problem_folder.txt', 'a') as f:
             f.write(folder['process_folder'] + '\n')
+        continue
 
     # --- 2. 主循环：遍历每个foloder的每张图片进行处理 ---
     for path_image, path_smpl, select_view in zip(folder['path_image'], folder['path_smpl'], folder['camera_view']):
@@ -230,8 +233,8 @@ for idx, folder in enumerate(folders):
             coords_2d = np.int32(coords_2d)[:, :2]
 
             # Find positive/negative gt:
-            dists = np.zeros(len(coords_2d))
-            dists[segmentation[coords_2d[:, 1], coords_2d[:, 0]] == 1] = 0
+            # dists = np.zeros(len(coords_2d))
+            # dists[segmentation[coords_2d[:, 1], coords_2d[:, 0]] == 1] = 0
 
             # TODO: MOVE THIS TO IMAGE UTILS SCRIPT:
             # Find array of indices per pixel:
