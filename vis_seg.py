@@ -20,51 +20,8 @@ import torch
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+import cv2
 
-
-
-# def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_view = '0004'):
-#     process_folders = []
-#     for subject_id in sorted(os.listdir(root_folder)):
-#         if subject_id in ['00148', '00149_1', '00149_2']:
-#             subject_dir = os.path.join(root_folder, subject_id)
-#             for outfit in subject_outfit:
-#                 outfit_dir = os.path.join(subject_dir, outfit)
-#                 if os.path.exists(outfit_dir):
-#                     take_dir_list = sorted(os.listdir(outfit_dir))
-#                     for take_id in take_dir_list:
-#                         take_dir = os.path.join(outfit_dir, take_id)
-#                         process_folders.append(take_dir)
-#                 else:
-#                     continue
-
-#     res = []
-#     for process_folder in process_folders:
-#         # process folder is one task for one outfit in one subject
-#         # print('Processing folder: ', process_folder)
-#         path_image = os.path.join(process_folder, 'Capture/', select_view, 'images')
-#         path_smpl_prediction = os.path.join(process_folder, 'SMPL')
-#         # path_segmentation = os.path.join(process_folder, 'Capture/', select_view, 'images')
-#         # path_instance_segmentation = os.path.join(process_folder, 'Capture/', select_view, 'masks')
-
-
-#         img_files = sorted(glob.glob(os.path.join(path_image, '*.png')))
-#         img_files = [img_files[0]]
-#         # mask_files = sorted(glob.glob(os.path.join(path_instance_segmentation, '*.png')))
-#         smpl_files = sorted(glob.glob(os.path.join(path_smpl_prediction, '*_smpl.pkl')))
-#         smpl_files = [smpl_files[0]]
-#         # seg_files = sorted(glob.glob(os.path.join(path_segmentation, '*.png')))
-
-#         assert len(img_files) == len(smpl_files)
-
-#         res.append({
-#             'process_folder': process_folder,
-#             'camera_view': select_view,
-#             'path_image': img_files,
-#             'path_smpl': smpl_files,
-#         })
-
-#     return res
 
 
 def adjust_segmentation_map(seg1, seg2):
@@ -135,62 +92,7 @@ def adjust_segmentation_map(seg1, seg2):
 
     return seg1
 
-# 只拟合upper, pants, skirts
-# def adjust_segmentation_map(seg1, seg2):
-#     seg1 = seg1.clone()
 
-#     B, H, W = seg1.shape
-
-#     for b in range(B):
-#         s1 = seg1[b]
-#         s2 = seg2[b]
-
-#         for cls, thresh in [(2,100), (5,50), (6,50), (7,50), (9,50), (12,50), (18,50)]:
-#             if (s1 == cls).sum() < thresh:
-#                 s1[s1 == cls] = 25
-
-#          # 2. dress=6 → 拆成 upper=5 和 skirts=12
-#         if (s1 == 6).any():
-#             s1[s1 == 9] = 6
-#             s1[s1 == 12] = 6
-#             mask_dress = (s1 == 6)
-
-#             mask_upper = mask_dress & (s2 == 2)   # dress ∩ upper cloth
-#             mask_skirt = mask_dress & (s2 == 1)   # dress ∩ lower cloth
-
-#             s1[mask_upper] = 5
-#             s1[mask_skirt] = 12
-            
-#         # 1. outer=7 存在 → upper=7 改成 5
-#         s1[s1 == 7] = 5
-#         s1[(s1 == 5) & (s2 != 2)] = 25
-#         s1[(s1 == 5) | (s2 == 2)] = 5
-
-        
-#         # 3. pants=9 与 skirts=12 同时出现 → 按面积选择大类
-#         if (s1 == 9).any() and (s1 == 12).any():
-#             cnt_pants = (s1 == 9).sum().item()
-#             cnt_skirt = (s1 == 12).sum().item()
-
-#             if cnt_pants >= cnt_skirt:
-#                 # 保留 pants=9，把 skirt=12 合并为 pants
-#                 s1[s1 == 12] = 9
-#             else:
-#                 # 保留 skirts=12，把 pants=9 合并为 skirts
-#                 s1[s1 == 9] = 12
-#         if (s1 == 12).any() and not (s1 == 9).any():
-#             # 5. 没有 pants=9，但有 skirts=12
-#             s1[(s1 == 12) & (s2 != 1)] = 25
-#             s1[(s1 == 12) | (s2 == 1)] = 12
-        
-#         if (s1 == 9).any() and not (s1 == 12).any():
-#             # 6. 没有 skirts=12，但有 pants=9
-#             s1[(s1 == 9) & (s2 != 1)] = 25
-#             s1[(s1 == 9) | (s2 == 1)] = 9
-
-#         seg1[b] = s1
-
-#     return seg1
 
 def get_palette(num_cls):
     """ Returns the color map for visualizing the segmentation mask.
@@ -293,4 +195,97 @@ for i, label in enumerate(labels):
     plt.text(i*50 + 25, 55, label, rotation=90, ha='center', va='top', fontsize=8)
 
 plt.show()
+
+
+# %%
+import matplotlib.image as mpimg
+import math
+import matplotlib.pyplot as plt
+import os
+
+def visualize_images(image_paths, ncol=20, figsize_per_image=(4, 4), save_path=None):
+    """
+    以组图形式可视化所有图片
+    Args:
+        image_paths: 图片路径列表
+        ncol: 每行的列数
+        figsize_per_image: 每张图占的大小 (宽, 高)
+        save_path: 可选，保存路径
+    """
+    num_images = len(image_paths)
+    nrow = math.ceil(num_images / ncol)
+
+    fig, axes = plt.subplots(nrow, ncol, figsize=(figsize_per_image[0] * ncol,
+                                                  figsize_per_image[1] * nrow))
+
+    # 如果只有一行或一列，axes不是二维，需要 reshape
+    axes = axes.flatten() if isinstance(axes, (list, np.ndarray)) else [axes]
+
+    for i, ax in enumerate(axes):
+        if i < num_images:
+            img = mpimg.imread(image_paths[i])
+            ax.imshow(img)
+            ax.axis("off")
+        else:
+            ax.axis("off")
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150)
+
+# visualize render images
+folders = extract_files('.datasets/4ddress')
+render_image_pths = []
+for folder in folders:
+    cloth_path = os.path.join(folder['process_folder'], 'Meshes_cloth')
+    img_path = glob.glob(f"{cloth_path}/render*.png")
+    if len(img_path) > 0:
+        img_path = img_path[0]
+        render_image_pths.append(img_path)
+
+visualize_images(render_image_pths, ncol=20, figsize_per_image=(4, 4), save_path='tmp/renders.png')
+
+
+# %%
+ori_images = []
+for folder in folders:
+    img_path = folder['path_image'][0]
+    mask_path = img_path.replace('images', 'masks')
+
+    # 读取图像和掩码
+    image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+    mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+    mask = mask != 0
+    image[~mask] = 255.
+    image = image / 255.
+
+    image = torch.from_numpy(image).permute(2, 0, 1).float()  # (3, H, W)
+
+
+    ori_images.append(image)
+
+ori_images = torch.stack(ori_images, dim=0)  # (B, 3, H, W)
+
+B = ori_images.shape[0]
+ncol = 20
+nrow = math.ceil(B / ncol)
+
+plt.figure(figsize=(ncol*2, nrow*2))
+for i in range(B):
+    plt.subplot(nrow, ncol, i+1)
+    plt.imshow(ori_images[i].permute(1, 2, 0).numpy())
+    plt.axis('off')
+
+plt.tight_layout()
+plt.savefig('tmp/ori_images.png', dpi=150)
+
+
+
+
+# %%
+path_ls = []
+for folder in folders:
+    path_ls.append(folder['process_folder'])
+# %%
+path_ls.index('.datasets/4ddress/00187/Outer/Take14')
 # %%

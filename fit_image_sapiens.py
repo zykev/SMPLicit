@@ -58,7 +58,7 @@ print("PROCESSING:")
 # print(files)
 
 folders = extract_files(_opt.root_folder)
-# folders = [folders[9]]
+folders = [folders[293]]
 
 segmentation_maps = get_segmentation_map(folders)
 segmentation_sapiens = get_segmentation_sapiens(folders)
