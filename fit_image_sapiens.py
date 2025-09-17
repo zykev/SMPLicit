@@ -6,7 +6,7 @@ import pickle
 import torch
 import glob
 import trimesh
-from fit_SMPLicit.utils.sdf import create_grid, eval_grid_octree, eval_grid
+from fit_SMPLicit.utils.sdf import create_grid
 from fit_SMPLicit.utils import projection
 from fit_SMPLicit.options.image_fitting_options import FitOptions
 # import kaolin
@@ -58,7 +58,7 @@ print("PROCESSING:")
 # print(files)
 
 folders = extract_files(_opt.root_folder)
-folders = [folders[293]]
+# folders = [folders[293]]
 
 segmentation_maps = get_segmentation_map(folders)
 segmentation_sapiens = get_segmentation_sapiens(folders)

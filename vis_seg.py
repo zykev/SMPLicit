@@ -12,7 +12,7 @@ sys.path.insert(0, HP_PATH)  # 插入到开头，优先搜索
 from submodules.human_parsing.evaluate_simple import get_segmentation_map
 from submodules.human_parsing.sapiens_seg import get_segmentation_sapiens
 
-from dress4d_utils import extract_files
+from dress4d_utils import extract_files, adjust_segmentation_map
 
 
 import glob
@@ -21,76 +21,6 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 import cv2
-
-
-
-def adjust_segmentation_map(seg1, seg2):
-    seg1 = seg1.clone()
-
-    B, H, W = seg1.shape
-
-    for b in range(B):
-        s1 = seg1[b]
-        s2 = seg2[b]
-
-        for cls, thresh in [(2,100), (5,50), (6,50), (7,50), (9,50), (12,50), (18,50)]:
-            if (s1 == cls).sum() < thresh:
-                s1[s1 == cls] = 25
-
-         # 2. dress=6 → 拆成 upper=5 和 skirts=12
-        if (s1 == 6).any():
-            mask_dress = (s1 == 6)
-
-            mask_upper = mask_dress & (s2 == 2)   # dress ∩ upper cloth
-            mask_skirt = mask_dress & (s2 == 1)   # dress ∩ lower cloth
-
-            s1[mask_upper] = 5
-            s1[mask_skirt] = 12
-            s1[s1 == 6] = 25
-            
-        # 1. outer=7 存在 → upper=5 改成 25
-        if (s1 == 7).any() and (s1 == 5).any():
-            cnt_outer = (s1 == 7).sum().item()
-            cnt_upper = (s1 == 5).sum().item()
-            if cnt_outer >= cnt_upper:
-                # 保留 outer=7，把 upper=5 改成25
-                s1[(s1 == 5)] = 25
-            else:
-                # 保留 upper=5，把 outer=7 合并为 upper
-                s1[s1 == 7] = 5
-        # 4. 没有 outer=7，但有 upper=5
-        if (s1 == 5).any() and not (s1 == 7).any():
-            s1[(s1 == 5) & (s2 != 2)] = 25
-            s1[(s1 == 5) | (s2 == 2)] = 5
-        
-        if (s1 == 7).any() and not (s1 == 5).any():
-            s1[(s1 == 7) & (s2 != 2)] = 25
-            # s1[(s1 == 7) | (s2 == 2)] = 7
-        
-        # 3. pants=9 与 skirts=12 同时出现 → 按面积选择大类
-        if (s1 == 9).any() and (s1 == 12).any():
-            cnt_pants = (s1 == 9).sum().item()
-            cnt_skirt = (s1 == 12).sum().item()
-
-            if cnt_pants >= cnt_skirt:
-                # 保留 pants=9，把 skirt=12 合并为 pants
-                s1[s1 == 12] = 9
-            else:
-                # 保留 skirts=12，把 pants=9 合并为 skirts
-                s1[s1 == 9] = 12
-        if (s1 == 12).any() and not (s1 == 9).any():
-            # 5. 没有 pants=9，但有 skirts=12
-            s1[(s1 == 12) & (s2 != 1)] = 25
-            s1[(s1 == 12) | (s2 == 1)] = 12
-        
-        if (s1 == 9).any() and not (s1 == 12).any():
-            # 6. 没有 skirts=12，但有 pants=9
-            s1[(s1 == 9) & (s2 != 1)] = 25
-            s1[(s1 == 9) | (s2 == 1)] = 9
-
-        seg1[b] = s1
-
-    return seg1
 
 
 
@@ -160,11 +90,11 @@ segmentation_maps_sapiens = get_segmentation_sapiens(folders)
 # %%
 segmentation_maps_adjusted = adjust_segmentation_map(segmentation_maps, segmentation_maps_sapiens)
 
-visualize_segmentation_batch(segmentation_maps, num_classes=21, save_path='tmp/segmap.png')
+visualize_segmentation_batch(segmentation_maps, num_classes=21, save_path='tmp/segmap2.png')
 
 
 # %%
-visualize_segmentation_batch(segmentation_maps_adjusted, num_classes=21, save_path='tmp/segmap_adj.png')
+visualize_segmentation_batch(segmentation_maps_adjusted, num_classes=21, save_path='tmp/segmap_adj2.png')
 
 
 # %%
@@ -243,7 +173,7 @@ for folder in folders:
         img_path = img_path[0]
         render_image_pths.append(img_path)
 
-visualize_images(render_image_pths, ncol=20, figsize_per_image=(4, 4), save_path='tmp/renders.png')
+visualize_images(render_image_pths, ncol=20, figsize_per_image=(4, 4), save_path='tmp/renders2.png')
 
 
 # %%
@@ -277,15 +207,15 @@ for i in range(B):
     plt.axis('off')
 
 plt.tight_layout()
-plt.savefig('tmp/ori_images.png', dpi=150)
+plt.savefig('tmp/ori_images2.png', dpi=150)
 
 
 
 
-# %%
-path_ls = []
-for folder in folders:
-    path_ls.append(folder['process_folder'])
-# %%
-path_ls.index('.datasets/4ddress/00187/Outer/Take14')
-# %%
+# # %%
+# path_ls = []
+# for folder in folders:
+#     path_ls.append(folder['process_folder'])
+# # %%
+# path_ls.index('.datasets/4ddress/00187/Outer/Take14')
+# # %%

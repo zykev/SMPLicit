@@ -31,20 +31,36 @@ SURFACE_LABEL_COLOR = np.array([[128, 128, 128], [255, 128, 0], [128, 0, 255], [
 VIEWS = ['0004', '0028', '0052', '0076']  # left, back, right, front
 # grey, orange, purple, red, green, blue
 
+SELECT_DIR = ["00122",
+    "00123",
+    "00127",
+    "00129",
+    "00134",
+    "00135_1",
+    "00136",
+    "00136_1",
+    "00136_2",
+    "00137_1",
+    "00137_2",
+    "00140_1",
+    "00140_2",
+    "00147"]
 
-def extract_files(root_folder, subject_outfit= ['Inner', 'Outer']):
+def extract_files(root_folder, subject_outfit= ['Inner', 'Outer'], select_dir=SELECT_DIR):
     process_folders = []
     for subject_id in sorted(os.listdir(root_folder)):
-        subject_dir = os.path.join(root_folder, subject_id)
-        for outfit in subject_outfit:
-            outfit_dir = os.path.join(subject_dir, outfit)
-            if os.path.exists(outfit_dir):
-                take_dir_list = sorted(os.listdir(outfit_dir))
-                for take_id in take_dir_list:
-                    take_dir = os.path.join(outfit_dir, take_id)
-                    process_folders.append(take_dir)
-            else:
-                continue
+        if select_dir is not None and subject_id in select_dir:
+            subject_dir = os.path.join(root_folder, subject_id)
+            for outfit in subject_outfit:
+                outfit_dir = os.path.join(subject_dir, outfit)
+                if os.path.exists(outfit_dir):
+                    take_dir_list = sorted(os.listdir(outfit_dir))
+                    for take_id in take_dir_list:
+                        if 'DS_Store' not in take_id:
+                            take_dir = os.path.join(outfit_dir, take_id)
+                            process_folders.append(take_dir)
+                else:
+                    continue
 
     res = []
     for process_folder in process_folders:
