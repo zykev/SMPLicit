@@ -12,7 +12,9 @@ sys.path.insert(0, HP_PATH)  # 插入到开头，优先搜索
 from submodules.human_parsing.evaluate_simple import get_segmentation_map
 from submodules.human_parsing.sapiens_seg import get_segmentation_sapiens
 
-from dress4d_utils import extract_files, adjust_segmentation_map
+from dress4d_utils import adjust_segmentation_map
+
+from zjumocap_utils import extract_files
 
 
 import glob
@@ -82,21 +84,22 @@ def visualize_segmentation_batch(seg_batch: torch.Tensor, num_classes: int, ncol
     # plt.show()
 
 # %%
-folders = extract_files('.datasets/4ddress')
+folders = extract_files('.datasets/zjumocap')
 
-segmentation_maps = get_segmentation_map(folders)
-segmentation_maps_sapiens = get_segmentation_sapiens(folders)
+segmentation_maps = get_segmentation_map(folders, image_size=[1024, 1024])
+segmentation_maps_sapiens = get_segmentation_sapiens(folders, image_size=[1024, 1024])
 
 # %%
 segmentation_maps_adjusted = adjust_segmentation_map(segmentation_maps, segmentation_maps_sapiens)
 
-visualize_segmentation_batch(segmentation_maps, num_classes=21, save_path='tmp/segmap2.png')
+visualize_segmentation_batch(segmentation_maps, num_classes=21, save_path='tmp/segmap_zjumocap.png')
 
+# visualize_segmentation_batch(segmentation_maps_sapiens, num_classes=21, save_path='tmp/segmap_zjumocap_sapiens.png')
 
 # %%
-visualize_segmentation_batch(segmentation_maps_adjusted, num_classes=21, save_path='tmp/segmap_adj2.png')
+visualize_segmentation_batch(segmentation_maps_adjusted, num_classes=21, save_path='tmp/segmap_adj_zjumocap.png')
 
-
+"""
 # %%
 # 类别信息
 labels = [
@@ -134,14 +137,14 @@ import matplotlib.pyplot as plt
 import os
 
 def visualize_images(image_paths, ncol=20, figsize_per_image=(4, 4), save_path=None):
-    """
-    以组图形式可视化所有图片
-    Args:
-        image_paths: 图片路径列表
-        ncol: 每行的列数
-        figsize_per_image: 每张图占的大小 (宽, 高)
-        save_path: 可选，保存路径
-    """
+
+    # 以组图形式可视化所有图片
+    # Args:
+    #     image_paths: 图片路径列表
+    #     ncol: 每行的列数
+    #     figsize_per_image: 每张图占的大小 (宽, 高)
+    #     save_path: 可选，保存路径
+ 
     num_images = len(image_paths)
     nrow = math.ceil(num_images / ncol)
 
@@ -219,3 +222,6 @@ plt.savefig('tmp/ori_images2.png', dpi=150)
 # # %%
 # path_ls.index('.datasets/4ddress/00187/Outer/Take14')
 # # %%
+
+
+"""
