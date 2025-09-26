@@ -60,8 +60,8 @@ print("PROCESSING:")
 folders = extract_files(_opt.root_folder)
 # folders = [folders[293]]
 
-segmentation_maps = get_segmentation_map(folders)
-segmentation_sapiens = get_segmentation_sapiens(folders)
+segmentation_maps = get_segmentation_map(folders, image_size=[1280, 940])
+segmentation_sapiens = get_segmentation_sapiens(folders, image_size=[1280, 940])
 
 assert len(folders) == len(segmentation_maps) == len(segmentation_sapiens)
 
