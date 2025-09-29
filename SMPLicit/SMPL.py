@@ -687,6 +687,49 @@ class SMPL(nn.Module):
             return J, v_shaped
         else:
             return J
+    
+    def skeleton_forward(self, beta, theta, transl = None, get_skin = False, theta_in_rodrigues=True):
+        device = beta.device
+        self.cur_device = torch.device(device.type, device.index)
+
+        num_batch = beta.shape[0]
+
+        v_shaped = torch.matmul(beta, self.shapedirs).view(-1, self.size[0], self.size[1]) + self.v_template
+        Jx = torch.matmul(v_shaped[:, :, 0], self.J_regressor)
+        Jy = torch.matmul(v_shaped[:, :, 1], self.J_regressor)
+        Jz = torch.matmul(v_shaped[:, :, 2], self.J_regressor)
+        J = torch.stack([Jx, Jy, Jz], dim = 2)
+        if theta_in_rodrigues:
+            Rs = batch_rodrigues(theta.view(-1, 3)).view(-1, 24, 3, 3)
+        else: #theta is already rotations
+            Rs = theta.view(-1,24,3,3)
+
+        # pose_feature = (Rs[:, 1:, :, :]).sub(self.e3, alpha=1.0).view(-1, 207)
+        # v_posed = torch.matmul(pose_feature, self.posedirs).view(-1, self.size[0], self.size[1]) + v_shaped
+        J_transformed, A = batch_global_rigid_transformation(Rs, J, self.parents, rotate_base = False)
+
+        # W=self.weight.expand(num_batch,*self.weight.shape[1:])
+        # T = torch.matmul(W, A.view(num_batch, 24, 16)).view(num_batch, -1, 4, 4)
+        
+        # v_posed_homo = torch.cat([v_posed, torch.ones(num_batch, v_posed.shape[1], 1, device = self.cur_device)], dim = 2)
+        # v_homo = torch.matmul(T, torch.unsqueeze(v_posed_homo, -1))
+
+        # verts = v_homo[:, :, :3, 0]
+
+        # joint_x = torch.matmul(verts[:, :, 0], self.J_regressor)
+        # joint_y = torch.matmul(verts[:, :, 1], self.J_regressor)
+        # joint_z = torch.matmul(verts[:, :, 2], self.J_regressor)
+
+        # joints = torch.stack([joint_x, joint_y, joint_z], dim = 2)
+
+        if transl is not None:
+            # verts += transl
+            J_transformed += transl
+
+        # if get_skin:
+        #     return verts, joints, Rs
+        # else:
+        return J_transformed
 
 def getSMPL():
     return SMPL(os.path.normpath(os.path.join(os.path.dirname(__file__),'model/neutral_smpl_with_cocoplus_reg.txt')), obj_saveable = True)

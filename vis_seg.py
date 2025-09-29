@@ -12,10 +12,11 @@ sys.path.insert(0, HP_PATH)  # 插入到开头，优先搜索
 from submodules.human_parsing.evaluate_simple import get_segmentation_map
 from submodules.human_parsing.sapiens_seg import get_segmentation_sapiens
 
-from dress4d_utils import adjust_segmentation_map
+from huge100k_utils import adjust_segmentation_map
 
-from zjumocap_utils import extract_files
+from huge100k_utils import extract_files
 
+import SMPLicit
 
 import glob
 import torch
@@ -24,7 +25,11 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import cv2
 
+SMPLicit_Layer = SMPLicit.SMPLicit()
+SMPLicit_Layer = SMPLicit_Layer.cuda()
 
+# Initialize SMPL-Related stuff:
+SMPL_Layer = SMPLicit_Layer.SMPL_Layer
 
 def get_palette(num_cls):
     """ Returns the color map for visualizing the segmentation mask.
@@ -84,20 +89,21 @@ def visualize_segmentation_batch(seg_batch: torch.Tensor, num_classes: int, ncol
     # plt.show()
 
 # %%
-folders = extract_files('.datasets/zjumocap')
+folders = extract_files('.datasets/HuGe100K')
 
-segmentation_maps = get_segmentation_map(folders, image_size=[1024, 1024])
-segmentation_maps_sapiens = get_segmentation_sapiens(folders, image_size=[1024, 1024])
-
-# %%
-segmentation_maps_adjusted = adjust_segmentation_map(segmentation_maps, segmentation_maps_sapiens)
-
-visualize_segmentation_batch(segmentation_maps, num_classes=21, save_path='tmp/segmap_zjumocap.png')
-
-# visualize_segmentation_batch(segmentation_maps_sapiens, num_classes=21, save_path='tmp/segmap_zjumocap_sapiens.png')
+segmentation_maps = get_segmentation_map(folders, image_size=[896, 640])
+segmentation_maps_sapiens = get_segmentation_sapiens(folders, image_size=[896, 640])
 
 # %%
-visualize_segmentation_batch(segmentation_maps_adjusted, num_classes=21, save_path='tmp/segmap_adj_zjumocap.png')
+segmentation_maps_adjusted = adjust_segmentation_map(segmentation_maps, SMPL_Layer, folders)
+# segmentation_maps_adjusted = adjust_segmentation_map(segmentation_maps, segmentation_maps_sapiens, minor_adj=False)
+
+visualize_segmentation_batch(segmentation_maps, num_classes=21, save_path='tmp/segmap_huge100k.png')
+
+visualize_segmentation_batch(segmentation_maps_sapiens, num_classes=21, save_path='tmp/segmap_huge100k_sapiens.png')
+
+# %%
+visualize_segmentation_batch(segmentation_maps_adjusted, num_classes=21, save_path='tmp/segmap_adj_huge100k.png')
 
 """
 # %%

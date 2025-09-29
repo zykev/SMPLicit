@@ -16,9 +16,9 @@ import shutil
 
 from fit_SMPLicit.utils import image_fitting
 
-from zjumocap_utils import extract_files
+from huge100k_utils import extract_files
 from dress4d_utils import get_depth_map, compute_projections, get_mesh_render, combine_meshes, get_02v_pose, point_to_mesh_distance
-from dress4d_utils import adjust_segmentation_map
+from huge100k_utils import adjust_segmentation_map
 
 import sys
 import os
@@ -31,7 +31,7 @@ HP_PATH = os.path.join(ROOT_DIR, "submodules", "human_parsing")
 sys.path.insert(0, HP_PATH)  # 插入到开头，优先搜索
 
 from submodules.human_parsing.evaluate_simple import get_segmentation_map
-from submodules.human_parsing.sapiens_seg import get_segmentation_sapiens
+# from submodules.human_parsing.sapiens_seg import get_segmentation_sapiens
 
 
 
@@ -58,22 +58,23 @@ cool_latent_reps = np.load('fit_SMPLicit/utils/z_gaussians.npy')
 print("PROCESSING:")
 # print(files)
 
-folders = extract_files('.datasets/zjumocap')
+folders = extract_files('.datasets/HuGe100K')
 # folders = [folders[293]]
 
 segmentation_maps = get_segmentation_map(folders, image_size=[896, 640])
-segmentation_sapiens = get_segmentation_sapiens(folders, image_size=[896, 640])
+# segmentation_sapiens = get_segmentation_sapiens(folders, image_size=[896, 640])
 
-assert len(folders) == len(segmentation_maps) == len(segmentation_sapiens)
+assert len(folders) == len(segmentation_maps)
 
-segmentation_maps = adjust_segmentation_map(segmentation_maps, segmentation_sapiens)
+# segmentation_maps = adjust_segmentation_map(segmentation_maps, segmentation_sapiens, minor_adj=False)
 
+segmentation_maps = adjust_segmentation_map(segmentation_maps, SMPL_Layer, folders)
 
 for idx, folder in enumerate(folders):
     print('Processing folder:', folder['process_folder'])
     # set save folder
-    subject_id = folder['process_folder'].split('/')[-1]
-    save_folder = os.path.join('.datasets/cloth', subject_id, 'Meshes_cloth')
+    identity_name = os.path.basename(folder['process_folder']).split(".")[0]
+    save_folder = os.path.join(os.path.dirname(folder['process_folder']).replace('param_smpl', 'Meshes_cloth'), identity_name)
     if os.path.exists(save_folder):
         shutil.rmtree(save_folder)
     os.makedirs(save_folder, exist_ok=True)  
@@ -98,16 +99,17 @@ for idx, folder in enumerate(folders):
             f.write(folder['process_folder'] + ',' + reason + '\n')
         continue
 
+    
+    pose = folder['pose'] # (1, 72)
+    beta = folder['beta'] # (1, 10)
+    transl = folder['transl'] # (1, 3)
     # --- 2. 主循环：遍历每个foloder的每张图片进行处理 ---
 
-    for path_image, path_smpl, select_view in zip(folder['path_image'], folder['path_smpl'], folder['camera_view']):
-        identity_id = os.path.basename(path_image).replace('.jpg', '')
-
-        path_instance_segmentation = path_image.replace('images', 'mask').replace('jpg', 'png')
+    for path_image, select_view in zip(folder['path_image'], folder['camera_view']):
+        identity_id = os.path.basename(path_image).replace('.png', '')
 
         # 读取图片和SMPL
         input_image = cv2.imread(path_image)
-        smpl_prediction = np.load(path_smpl, allow_pickle=True).item()
 
         posed_meshes = []
         unposed_meshes = []
@@ -115,26 +117,9 @@ for idx, folder in enumerate(folders):
         # posed_normals = []
         # colors = []
 
-        instance_segmentation = cv2.imread(path_instance_segmentation, 0)
-
-
-        # Image crop params:
-        global_orient = torch.from_numpy(smpl_prediction['Rh']) # (1, 3)
-        body_pose = torch.from_numpy(smpl_prediction['poses'])[:, 3:] # (1, 69)
-        pose_wo_global = torch.from_numpy(smpl_prediction['poses']) # (1, 72)
-        pose = torch.hstack((global_orient, body_pose)) # (1, 72)
-        beta = torch.from_numpy(smpl_prediction['shapes']) # (1, 10)
-        transl = torch.from_numpy(smpl_prediction['Th']) # (1, 3)
-
-        # pose correction
-        vert_w_global = SMPL_Layer.forward(beta=beta.cuda(), theta=pose.cuda(), transl=transl.cuda(),
-                                        get_skin=True)[0][0].cpu()
-
-        vert_wo_global = SMPL_Layer.forward(beta=beta.cuda(), theta=pose_wo_global.cuda(), transl=transl.cuda(),
-                                        get_skin=True)[0][0].cpu()
-
-
-        transl = transl + (vert_wo_global - vert_w_global).mean(0, keepdims=True)
+        threshold = 245
+        mask = ~np.all(input_image >= threshold, axis=-1) # 所有通道都大于等于阈值 -> False, 其他 -> True
+        instance_segmentation = mask.astype(np.uint8)       # (H, W)
 
 
         # 生成基础 SMPL 身体和深度图

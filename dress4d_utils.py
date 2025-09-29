@@ -608,7 +608,7 @@ def get_02v_pose(num_joints=24):
     return smpl_pose
 
 
-def adjust_segmentation_map(seg1, seg2):
+def adjust_segmentation_map(seg1, seg2, minor_adj=True):
     seg1 = seg1.clone()
 
     B, H, W = seg1.shape
@@ -642,14 +642,16 @@ def adjust_segmentation_map(seg1, seg2):
             else:
                 # 保留 upper=5，把 outer=7 合并为 upper
                 s1[s1 == 7] = 5
+
         # 4. 没有 outer=7，但有 upper=5
-        if (s1 == 5).any() and not (s1 == 7).any():
-            s1[(s1 == 5) & (s2 != 2)] = 25
-            s1[(s1 == 5) | (s2 == 2)] = 5
-        
-        if (s1 == 7).any() and not (s1 == 5).any():
-            s1[(s1 == 7) & (s2 != 2)] = 25
-            # s1[(s1 == 7) | (s2 == 2)] = 7
+        if minor_adj:
+            if (s1 == 5).any() and not (s1 == 7).any():
+                s1[(s1 == 5) & (s2 != 2)] = 25
+                s1[(s1 == 5) | (s2 == 2)] = 5
+            
+            if (s1 == 7).any() and not (s1 == 5).any():
+                s1[(s1 == 7) & (s2 != 2)] = 25
+                # s1[(s1 == 7) | (s2 == 2)] = 7
         
         # 3. pants=9 与 skirts=12 同时出现 → 按面积选择大类
         if (s1 == 9).any() and (s1 == 12).any():
@@ -662,15 +664,17 @@ def adjust_segmentation_map(seg1, seg2):
             else:
                 # 保留 skirts=12，把 pants=9 合并为 skirts
                 s1[s1 == 9] = 12
-        if (s1 == 12).any() and not (s1 == 9).any():
-            # 5. 没有 pants=9，但有 skirts=12
-            s1[(s1 == 12) & (s2 != 1)] = 25
-            s1[(s1 == 12) | (s2 == 1)] = 12
         
-        if (s1 == 9).any() and not (s1 == 12).any():
-            # 6. 没有 skirts=12，但有 pants=9
-            s1[(s1 == 9) & (s2 != 1)] = 25
-            s1[(s1 == 9) | (s2 == 1)] = 9
+        if minor_adj:
+            if (s1 == 12).any() and not (s1 == 9).any():
+                # 5. 没有 pants=9，但有 skirts=12
+                s1[(s1 == 12) & (s2 != 1)] = 25
+                s1[(s1 == 12) | (s2 == 1)] = 12
+            
+            if (s1 == 9).any() and not (s1 == 12).any():
+                # 6. 没有 skirts=12，但有 pants=9
+                s1[(s1 == 9) & (s2 != 1)] = 25
+                s1[(s1 == 9) | (s2 == 1)] = 9
 
         seg1[b] = s1
 
