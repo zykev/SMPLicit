@@ -16,9 +16,8 @@ import shutil
 
 from fit_SMPLicit.utils import image_fitting
 
-from huge100k_utils import extract_files_tmp
-from dress4d_utils import get_depth_map, compute_projections, get_mesh_render, combine_meshes, get_02v_pose, point_to_mesh_distance
-from huge100k_utils import adjust_segmentation_map
+from thuman_utils import extract_files
+from dress4d_utils import get_depth_map, compute_projections, get_mesh_render, combine_meshes, get_02v_pose, point_to_mesh_distance, adjust_segmentation_map
 
 import sys
 import os
@@ -31,7 +30,7 @@ HP_PATH = os.path.join(ROOT_DIR, "submodules", "human_parsing")
 sys.path.insert(0, HP_PATH)  # 插入到开头，优先搜索
 
 from submodules.human_parsing.evaluate_simple import get_segmentation_map
-# from submodules.human_parsing.sapiens_seg import get_segmentation_sapiens
+from submodules.human_parsing.sapiens_seg import get_segmentation_sapiens
 
 
 
@@ -58,23 +57,21 @@ cool_latent_reps = np.load('fit_SMPLicit/utils/z_gaussians.npy')
 print("PROCESSING:")
 # print(files)
 
-folders = extract_files_tmp('.datasets/HuGe100K')
+folders = extract_files('.datasets/THuman')
 # folders = [folders[293]]
 
-segmentation_maps = get_segmentation_map(folders, image_size=[896, 640])
-# segmentation_sapiens = get_segmentation_sapiens(folders, image_size=[896, 640])
+segmentation_maps = get_segmentation_map(folders, image_size=[1024, 1024])
+segmentation_sapiens = get_segmentation_sapiens(folders, image_size=[1024, 1024])
 
 assert len(folders) == len(segmentation_maps)
 
-# segmentation_maps = adjust_segmentation_map(segmentation_maps, segmentation_sapiens, minor_adj=False)
+segmentation_maps = adjust_segmentation_map(segmentation_maps, segmentation_sapiens, minor_adj=True)
 
-segmentation_maps = adjust_segmentation_map(segmentation_maps, SMPL_Layer, folders)
 
 for idx, folder in enumerate(folders):
     print('Processing folder:', folder['process_folder'])
     # set save folder
-    identity_name = os.path.basename(folder['process_folder']).split(".")[0]
-    save_folder = os.path.join(os.path.dirname(folder['process_folder']).replace('param_smpl', 'Meshes_cloth'), identity_name)
+    save_folder = os.path.join('.datasets/THuman', 'Meshes_cloth', folder['process_folder'])
     if os.path.exists(save_folder):
         shutil.rmtree(save_folder)
     os.makedirs(save_folder, exist_ok=True)  

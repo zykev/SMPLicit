@@ -10,7 +10,7 @@ HP_PATH = os.path.join(ROOT_DIR, "submodules", "human_parsing")
 sys.path.insert(0, HP_PATH)  # 插入到开头，优先搜索
 
 from submodules.human_parsing.evaluate_simple import get_segmentation_map
-from submodules.human_parsing.sapiens_seg import get_segmentation_sapiens
+# from submodules.human_parsing.sapiens_seg import get_segmentation_sapiens
 
 from huge100k_utils import adjust_segmentation_map
 
@@ -89,18 +89,18 @@ def visualize_segmentation_batch(seg_batch: torch.Tensor, num_classes: int, ncol
     # plt.show()
 
 # %%
-folders = extract_files('.datasets/HuGe100K')
+folders = extract_files('.datasets/THuman')
 
 segmentation_maps = get_segmentation_map(folders, image_size=[896, 640])
-segmentation_maps_sapiens = get_segmentation_sapiens(folders, image_size=[896, 640])
+# segmentation_maps_sapiens = get_segmentation_sapiens(folders, image_size=[896, 640])
 
 # %%
 segmentation_maps_adjusted = adjust_segmentation_map(segmentation_maps, SMPL_Layer, folders)
-# segmentation_maps_adjusted = adjust_segmentation_map(segmentation_maps, segmentation_maps_sapiens, minor_adj=False)
+# segmentation_maps_adjusted = adjust_segmentation_map(segmentation_maps, segmentation_maps_sapiens, minor_adj=True)
 
 visualize_segmentation_batch(segmentation_maps, num_classes=21, save_path='tmp/segmap_huge100k.png')
 
-visualize_segmentation_batch(segmentation_maps_sapiens, num_classes=21, save_path='tmp/segmap_huge100k_sapiens.png')
+# visualize_segmentation_batch(segmentation_maps_sapiens, num_classes=21, save_path='tmp/segmap_thuman_sapiens.png')
 
 # %%
 visualize_segmentation_batch(segmentation_maps_adjusted, num_classes=21, save_path='tmp/segmap_adj_huge100k.png')
@@ -135,6 +135,7 @@ for i, label in enumerate(labels):
 
 plt.show()
 
+"""
 
 # %%
 import matplotlib.image as mpimg
@@ -173,29 +174,32 @@ def visualize_images(image_paths, ncol=20, figsize_per_image=(4, 4), save_path=N
         plt.savefig(save_path, dpi=150)
 
 # visualize render images
-folders = extract_files('.datasets/4ddress')
+# folders = extract_files('.datasets/HuGe100K')
 render_image_pths = []
 for folder in folders:
-    cloth_path = os.path.join(folder['process_folder'], 'Meshes_cloth')
+    # cloth_path = os.path.join(folder['process_folder'], 'Meshes_cloth')
+    identity_name = os.path.basename(folder['process_folder']).split(".")[0]
+    cloth_path = os.path.join(os.path.dirname(folder['process_folder']).replace('param_smpl', 'Meshes_cloth'), identity_name)
+    # cloth_path = os.path.join('.datasets/THuman', 'Meshes_cloth', folder['process_folder'])
     img_path = glob.glob(f"{cloth_path}/render*.png")
     if len(img_path) > 0:
         img_path = img_path[0]
         render_image_pths.append(img_path)
 
-visualize_images(render_image_pths, ncol=20, figsize_per_image=(4, 4), save_path='tmp/renders2.png')
+visualize_images(render_image_pths, ncol=20, figsize_per_image=(4, 4), save_path='tmp/renders_huge100k.png')
 
 
 # %%
 ori_images = []
 for folder in folders:
     img_path = folder['path_image'][0]
-    mask_path = img_path.replace('images', 'masks')
+    # mask_path = img_path.replace('images', 'masks')
 
     # 读取图像和掩码
     image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
-    mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
-    mask = mask != 0
-    image[~mask] = 255.
+    # mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+    # mask = mask != 0
+    # image[~mask] = 255.
     image = image / 255.
 
     image = torch.from_numpy(image).permute(2, 0, 1).float()  # (3, H, W)
@@ -216,7 +220,7 @@ for i in range(B):
     plt.axis('off')
 
 plt.tight_layout()
-plt.savefig('tmp/ori_images2.png', dpi=150)
+plt.savefig('tmp/ori_images_huge100k.png', dpi=150)
 
 
 
@@ -230,4 +234,3 @@ plt.savefig('tmp/ori_images2.png', dpi=150)
 # # %%
 
 
-"""

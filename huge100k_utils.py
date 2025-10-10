@@ -14,7 +14,7 @@ random.seed(42)
 
 SELECT_DIR = ["batch1"]
 
-def extract_files(root_folder, select_dir=SELECT_DIR):
+def extract_files(root_folder, select_dir=SELECT_DIR, select_dir2=['images0', 'images1']):
     
 
     # gather all take directories of each subject
@@ -25,6 +25,8 @@ def extract_files(root_folder, select_dir=SELECT_DIR):
         sub_dir = sorted(os.listdir(os.path.join(root_folder, batch_name)))
         batch_dir = os.path.join(root_folder, batch_name, sub_dir[0])
         for item_name in sorted(os.listdir(batch_dir)):
+            if item_name not in select_dir2:
+                continue
             subject_dir_list.append(os.path.join(batch_dir, item_name))
 
     res = []
@@ -35,7 +37,7 @@ def extract_files(root_folder, select_dir=SELECT_DIR):
         for item in sorted(os.listdir(param_dir)):
             all_param_files.append(os.path.join(param_dir, item))
 
-    # all_param_files = random.sample(all_param_files, 300)
+    all_param_files = all_param_files[:300] # random.sample(all_param_files, 300)
 
     for param_path in tqdm(all_param_files, desc="Loading all subject data in huge100k"):
  
@@ -87,6 +89,81 @@ def extract_files(root_folder, select_dir=SELECT_DIR):
 
     return res
 
+
+def extract_files_tmp(root_folder, select_dir=SELECT_DIR):
+    
+
+    # gather all take directories of each subject
+    subject_dir_list = []
+    for batch_name in sorted(os.listdir(root_folder)):
+        if batch_name is not None and batch_name not in select_dir:
+            continue
+        sub_dir = sorted(os.listdir(os.path.join(root_folder, batch_name)))
+        batch_dir = os.path.join(root_folder, batch_name, sub_dir[0])
+        for item_name in sorted(os.listdir(batch_dir)):
+            subject_dir_list.append(os.path.join(batch_dir, item_name))
+
+    res = []
+    # 先统计所有 param 文件路径
+    all_param_files = []
+    for item_dir in subject_dir_list:
+        param_dir = os.path.join(item_dir, "param_smpl")
+        for item in sorted(os.listdir(param_dir)):
+            all_param_files.append(os.path.join(param_dir, item))
+
+    for param_path in tqdm(all_param_files, desc="Loading all subject data in huge100k"):
+ 
+        identity_name = os.path.basename(param_path).split(".")[0]
+
+        cloth_path = os.path.join(os.path.dirname(param_path).replace('param_smpl', 'Meshes_cloth'), identity_name)
+        if not os.path.exists(cloth_path):
+
+            smplx_param_path = os.path.join(os.path.dirname(param_path).replace('param_smpl', 'param'), f'{identity_name}.npy')
+            images_path = os.path.join(os.path.dirname(param_path).replace('param_smpl', 'images'), identity_name)
+
+            smpl_param = pickle.load(open(param_path, 'rb'))
+            pose = torch.cat([smpl_param['global_orient'], smpl_param['body_pose']], dim=0) # (24,3,3)
+            pose = matrix_to_axis_angle(pose).reshape(1, -1) # (1, 72)
+            beta = smpl_param['betas'].unsqueeze(0) # (1, 10)
+            if smpl_param['transl'] is not None:
+                transl = smpl_param['transl'].reshape(1, -1)
+            else:
+                transl = torch.zeros((1, 3))
+
+            camera_info = np.load(smplx_param_path, allow_pickle=True).item()['poses']
+
+            img_file = sorted(glob.glob(os.path.join(images_path, '*.png')))[0]
+            front_view_idx = Path(img_file).stem.split("view_")[-1]
+            cam_idx = int(front_view_idx)
+            
+            intrinsic_params = camera_info[cam_idx][1]  # fx, fy, cx, cy
+            extrinsic_params = camera_info[cam_idx][0] # R|T
+
+
+            R = extrinsic_params[:3, :3].numpy().astype(np.float32)
+            T = extrinsic_params[:3, 3].numpy().astype(np.float32)
+            K = np.array([
+            [intrinsic_params[0], 0, intrinsic_params[2]],
+            [0, intrinsic_params[1], intrinsic_params[3]],
+            [0,  0,  1]
+            ], dtype=np.float32)
+
+            R = torch.from_numpy(R).unsqueeze(0)
+            T = torch.from_numpy(T).unsqueeze(0)
+            K = torch.from_numpy(K).unsqueeze(0)
+
+            res.append({
+                'process_folder': param_path,
+                'camera_view': [front_view_idx],
+                'camera_params': (K, R, T),
+                'path_image': [img_file],
+                'pose': pose,
+                'beta': beta,
+                'transl': transl
+            })
+
+
+    return res
     
 def compute_projections(xyz, K, R, T):
     """
