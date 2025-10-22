@@ -12,9 +12,9 @@ import random
 random.seed(42)
 
 
-SELECT_DIR = ["batch1"]
+SELECT_DIR = ["batch8"]
 
-def extract_files(root_folder, select_dir=SELECT_DIR, select_dir2=['images0', 'images1']):
+def extract_files(root_folder, select_dir=SELECT_DIR, select_dir2=['images0', 'images1', 'images2']):
     
 
     # gather all take directories of each subject
@@ -37,7 +37,7 @@ def extract_files(root_folder, select_dir=SELECT_DIR, select_dir2=['images0', 'i
         for item in sorted(os.listdir(param_dir)):
             all_param_files.append(os.path.join(param_dir, item))
 
-    all_param_files = all_param_files[:300] # random.sample(all_param_files, 300)
+    # all_param_files = all_param_files[:300] # random.sample(all_param_files, 300)
 
     for param_path in tqdm(all_param_files, desc="Loading all subject data in huge100k"):
  

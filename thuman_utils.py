@@ -5,7 +5,7 @@ import torch
 import json
 import pickle
 
-SELECT_DIR = [f"{i:04d}" for i in range(526)]
+SELECT_DIR = [f"{i:04d}" for i in range(527)]
 def extract_files(root_folder, image_size = [1024, 1024], select_dir=SELECT_DIR):
     res = []
     for subject_id in sorted(os.listdir(os.path.join(root_folder, 'process'))):
